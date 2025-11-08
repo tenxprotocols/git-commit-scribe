@@ -94,22 +94,38 @@ func hasStagedChanges() bool {
 
 // filterGeneratedFiles removes generated files from diff
 func filterGeneratedFiles(diff string) string {
-	// Common patterns for generated files
+	// Split diff into individual file diffs
+	fileDiffs := SplitDiffByFiles(diff)
+	
+	// Common patterns for generated files (matching the "diff --git" line)
 	patterns := []*regexp.Regexp{
-		regexp.MustCompile(`(?m)^diff --git a/.*\.lock b/.*\.lock$.*?(?=^diff --git|\z)`),
-		regexp.MustCompile(`(?m)^diff --git a/.*\.min\.(js|css) b/.*\.min\.(js|css)$.*?(?=^diff --git|\z)`),
-		regexp.MustCompile(`(?m)^diff --git a/.*\.generated\. b/.*\.generated\.$.*?(?=^diff --git|\z)`),
-		regexp.MustCompile(`(?m)^diff --git a/.*package-lock\.json b/.*package-lock\.json$.*?(?=^diff --git|\z)`),
-		regexp.MustCompile(`(?m)^diff --git a/.*yarn\.lock b/.*yarn\.lock$.*?(?=^diff --git|\z)`),
-		regexp.MustCompile(`(?m)^diff --git a/.*go\.sum b/.*go\.sum$.*?(?=^diff --git|\z)`),
-		regexp.MustCompile(`(?m)^diff --git a/.*Cargo\.lock b/.*Cargo\.lock$.*?(?=^diff --git|\z)`),
+		regexp.MustCompile(`^diff --git a/.*\.lock b/.*\.lock$`),
+		regexp.MustCompile(`^diff --git a/.*\.min\.(js|css) b/.*\.min\.(js|css)$`),
+		regexp.MustCompile(`^diff --git a/.*\.generated\. b/.*\.generated\.$`),
+		regexp.MustCompile(`^diff --git a/.*package-lock\.json b/.*package-lock\.json$`),
+		regexp.MustCompile(`^diff --git a/.*yarn\.lock b/.*yarn\.lock$`),
+		regexp.MustCompile(`^diff --git a/.*go\.sum b/.*go\.sum$`),
+		regexp.MustCompile(`^diff --git a/.*Cargo\.lock b/.*Cargo\.lock$`),
 	}
 
-	for _, pattern := range patterns {
-		diff = pattern.ReplaceAllString(diff, "")
+	var filtered []string
+	for _, fileDiff := range fileDiffs {
+		isGenerated := false
+		firstLine := strings.Split(fileDiff, "\n")[0]
+		
+		for _, pattern := range patterns {
+			if pattern.MatchString(firstLine) {
+				isGenerated = true
+				break
+			}
+		}
+		
+		if !isGenerated {
+			filtered = append(filtered, fileDiff)
+		}
 	}
 
-	return diff
+	return strings.Join(filtered, "")
 }
 
 // countFilesInDiff counts the number of files in a diff

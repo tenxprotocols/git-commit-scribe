@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -42,7 +41,7 @@ func (dc *DiskCache) Get(ctx context.Context, key string) (string, bool, error) 
 	filePath := dc.getFilePath(key)
 
 	// Check if file exists
-	info, err := os.Stat(filePath)
+	_, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
 		return "", false, nil
 	}

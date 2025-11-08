@@ -25,6 +25,7 @@ var CLI struct {
 	ConfigDir  string `help:"Path to config directory" type:"path" env:"GSCRIBE_CONFIG_DIR" default:"~/.config/gscribe"`
 	Provider  string `help:"AI provider (currently only openrouter)" default:"openrouter" enum:"openrouter" env:"GSCRIBE_PROVIDER"`
 	Model     string `help:"Model to use" env:"GSCRIBE_MODEL"`
+	APIKey    string `help:"API key for AI provider" env:"GSCRIBE_API_KEY"`
 	Verbose   bool   `short:"v" help:"Enable verbose logging" env:"GSCRIBE_VERBOSE"`
 	NoCache   bool   `help:"Disable caching" env:"GSCRIBE_NO_CACHE"`
 
@@ -73,6 +74,9 @@ func (c *CommitCmd) Run(ctx *Context) error {
 	}
 	if CLI.Model != "" {
 		cfg.Model = CLI.Model
+	}
+	if CLI.APIKey != "" {
+		cfg.APIKey = CLI.APIKey
 	}
 	if CLI.NoCache {
 		cfg.Cache.Enabled = false
