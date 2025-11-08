@@ -5,7 +5,7 @@ import (
 	"github.com/tenxprotocols/git-commit-scribe/internal/cli"
 )
 
-var version = "dev"
+var version = "1.0.0"
 
 func main() {
 	ctx := kong.Parse(&cli.CLI,
