@@ -3,11 +3,14 @@ package cli
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/tenxprotocols/git-commit-scribe/internal/ai"
+	"github.com/tenxprotocols/git-commit-scribe/internal/cache"
 	"github.com/tenxprotocols/git-commit-scribe/internal/config"
 	"github.com/tenxprotocols/git-commit-scribe/internal/conventional"
 	"github.com/tenxprotocols/git-commit-scribe/internal/git"
@@ -98,43 +101,112 @@ func (c *CommitCmd) Run(ctx *Context) error {
 		fmt.Printf("Analyzing %d staged file(s)...\n", len(files))
 	}
 
-	// Initialize AI provider
-	var provider ai.Provider
-	switch cfg.Provider {
-	case "openrouter":
-		if cfg.APIKey == "" {
-			return fmt.Errorf("API key not configured. Run 'gscribe config init' or set GSCRIBE_API_KEY environment variable")
-		}
-		provider, err = ai.NewOpenRouterProvider(cfg.APIKey, cfg.Model)
+	// Initialize cache if enabled
+	var cacheInstance cache.Cache
+	if cfg.Cache.Enabled {
+		cacheDir := config.GetCacheDir(loader.GetConfigDir())
+		
+		// Create memory cache
+		memCache := cache.NewMemoryCache(cfg.Cache.MaxMemoryMB, time.Duration(cfg.Cache.TTL)*time.Second)
+		
+		// Create disk cache
+		diskCache, err := cache.NewDiskCache(cacheDir, cfg.Cache.MaxDiskMB, time.Duration(cfg.Cache.TTL)*time.Second)
 		if err != nil {
-			return fmt.Errorf("failed to create AI provider: %w", err)
+			if CLI.Verbose {
+				fmt.Printf("Warning: Failed to initialize disk cache: %v\n", err)
+			}
+			// Fall back to memory-only cache
+			cacheInstance = memCache
+		} else {
+			// Use multi-level cache
+			cacheInstance = cache.NewMultiCache(memCache, diskCache)
 		}
-	default:
-		return fmt.Errorf("unsupported provider: %s", cfg.Provider)
+		
+		if CLI.Verbose {
+			fmt.Println("Cache initialized")
+		}
 	}
 
-	// Generate commit message
-	if CLI.Verbose {
-		fmt.Printf("Generating commit message using %s...\n", cfg.Model)
+	// Generate cache key from diff and options
+	cacheKey := cache.GenerateKey(
+		diff,
+		c.Type,
+		c.Scope,
+		fmt.Sprintf("%v", c.Breaking),
+		fmt.Sprintf("%v", cfg.Commit.OneLine),
+		fmt.Sprintf("%d", cfg.Commit.DescriptionLength),
+		cfg.Model,
+	)
+
+	// Try to get from cache
+	var result *ai.CommitResult
+	if cfg.Cache.Enabled && cacheInstance != nil {
+		cacheCtx := context.Background()
+		if cached, found, err := cacheInstance.Get(cacheCtx, cacheKey); err == nil && found {
+			if CLI.Verbose {
+				fmt.Println("✓ Using cached commit message")
+			}
+			
+			// Deserialize cached result
+			var cachedResult ai.CommitResult
+			if err := json.Unmarshal([]byte(cached), &cachedResult); err == nil {
+				result = &cachedResult
+			} else if CLI.Verbose {
+				fmt.Printf("Warning: Failed to deserialize cached result: %v\n", err)
+			}
+		}
 	}
 
-	genOpts := ai.GenerateOptions{
-		Diff:           diff,
-		Type:           c.Type,
-		Scope:          c.Scope,
-		Breaking:       c.Breaking,
-		OneLine:        cfg.Commit.OneLine,
-		MaxLength:      cfg.Commit.DescriptionLength,
-		AvailableTypes: cfg.Types,
-		Temperature:    cfg.AI.Temperature,
-	}
+	// If not in cache, generate with AI
+	if result == nil {
+		// Initialize AI provider
+		var provider ai.Provider
+		switch cfg.Provider {
+		case "openrouter":
+			if cfg.APIKey == "" {
+				return fmt.Errorf("API key not configured. Run 'gscribe config init' or set GSCRIBE_API_KEY environment variable")
+			}
+			provider, err = ai.NewOpenRouterProvider(cfg.APIKey, cfg.Model)
+			if err != nil {
+				return fmt.Errorf("failed to create AI provider: %w", err)
+			}
+		default:
+			return fmt.Errorf("unsupported provider: %s", cfg.Provider)
+		}
 
-	aiCtx, cancel := context.WithTimeout(context.Background(), cfg.AI.Timeout)
-	defer cancel()
+		// Generate commit message
+		if CLI.Verbose {
+			fmt.Printf("Generating commit message using %s...\n", cfg.Model)
+		}
 
-	result, err := provider.GenerateCommitMessage(aiCtx, genOpts)
-	if err != nil {
-		return fmt.Errorf("failed to generate commit message: %w", err)
+		genOpts := ai.GenerateOptions{
+			Diff:           diff,
+			Type:           c.Type,
+			Scope:          c.Scope,
+			Breaking:       c.Breaking,
+			OneLine:        cfg.Commit.OneLine,
+			MaxLength:      cfg.Commit.DescriptionLength,
+			AvailableTypes: cfg.Types,
+			Temperature:    cfg.AI.Temperature,
+		}
+
+		aiCtx, cancel := context.WithTimeout(context.Background(), cfg.AI.Timeout)
+		defer cancel()
+
+		result, err = provider.GenerateCommitMessage(aiCtx, genOpts)
+		if err != nil {
+			return fmt.Errorf("failed to generate commit message: %w", err)
+		}
+
+		// Store in cache
+		if cfg.Cache.Enabled && cacheInstance != nil {
+			cacheCtx := context.Background()
+			if serialized, err := json.Marshal(result); err == nil {
+				if err := cacheInstance.Set(cacheCtx, cacheKey, string(serialized)); err != nil && CLI.Verbose {
+					fmt.Printf("Warning: Failed to cache result: %v\n", err)
+				}
+			}
+		}
 	}
 
 	// Format the commit message
