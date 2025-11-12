@@ -58,11 +58,13 @@ gscribe -p
 - [Configuration](docs/configuration.md) - Configure API keys, models, and settings
 - [Usage Guide](docs/usage.md) - Detailed usage examples and workflows
 - [CLI Reference](docs/cli-reference.md) - Complete command-line options
+- [Custom Prompts](docs/prompts.md) - Customize AI prompts for your workflow
 
 ## Features
 
 ✨ AI-powered commit message generation  
 📝 Full Conventional Commits v1.0.0 support  
+🎯 Customizable AI prompts for your workflow  
 🎨 Optional emoji in commit messages  
 ⚙️ Highly configurable via CLI flags or config files  
 💾 Smart caching for faster repeated operations  

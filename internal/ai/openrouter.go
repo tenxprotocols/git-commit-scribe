@@ -2,12 +2,18 @@ package ai
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"text/template"
 
 	openrouter "github.com/revrost/go-openrouter"
 )
+
+//go:embed prompts/default.txt
+var defaultPromptFS embed.FS
 
 // OpenRouterProvider implements the Provider interface using OpenRouter
 type OpenRouterProvider struct {
@@ -61,8 +67,57 @@ func (p *OpenRouterProvider) GenerateCommitMessage(ctx context.Context, opts Gen
 	return result, nil
 }
 
-// buildPrompt builds the prompt for the AI
+// buildPrompt builds the prompt for the AI using templates
 func (p *OpenRouterProvider) buildPrompt(opts GenerateOptions) string {
+	// Get the prompt template
+	promptTemplate, err := p.loadPromptTemplate(opts.CustomPrompt)
+	if err != nil {
+		// Fallback to hardcoded default if template loading fails
+		return p.buildDefaultPrompt(opts)
+	}
+
+	// Parse the template
+	tmpl, err := template.New("prompt").Parse(promptTemplate)
+	if err != nil {
+		return p.buildDefaultPrompt(opts)
+	}
+
+	// Execute the template with options
+	var sb strings.Builder
+	if err := tmpl.Execute(&sb, opts); err != nil {
+		return p.buildDefaultPrompt(opts)
+	}
+
+	return sb.String()
+}
+
+// loadPromptTemplate loads a prompt template from custom source or default
+func (p *OpenRouterProvider) loadPromptTemplate(customPrompt string) (string, error) {
+	// If custom prompt provided, use it
+	if customPrompt != "" {
+		// Check if it's a file path
+		if _, err := os.Stat(customPrompt); err == nil {
+			content, err := os.ReadFile(customPrompt)
+			if err != nil {
+				return "", fmt.Errorf("failed to read custom prompt file: %w", err)
+			}
+			return string(content), nil
+		}
+		// Otherwise treat it as inline prompt text
+		return customPrompt, nil
+	}
+
+	// Load default embedded prompt
+	content, err := defaultPromptFS.ReadFile("prompts/default.txt")
+	if err != nil {
+		return "", fmt.Errorf("failed to read default prompt: %w", err)
+	}
+
+	return string(content), nil
+}
+
+// buildDefaultPrompt is a fallback that builds the prompt without templates
+func (p *OpenRouterProvider) buildDefaultPrompt(opts GenerateOptions) string {
 	var sb strings.Builder
 
 	sb.WriteString("You are an expert at writing conventional commit messages. ")

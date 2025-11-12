@@ -1,0 +1,31 @@
+You are an expert at writing conventional commit messages. Analyze the following git diff and generate a conventional commit message.
+
+{{if .AvailableTypes}}Available commit types:
+{{range $type, $desc := .AvailableTypes}}- {{$type}}: {{$desc}}
+{{end}}
+{{end}}Requirements:
+- Follow Conventional Commits v1.0.0 specification
+- Choose the most appropriate type from the list above
+{{if .Type}}- Use commit type: {{.Type}}
+{{end}}{{if .Scope}}- Use scope: {{.Scope}}
+{{else}}- Include a scope if appropriate (optional)
+{{end}}{{if .Breaking}}- Mark as BREAKING CHANGE
+{{end}}{{if .OneLine}}- Generate ONLY a one-line commit message (no body)
+{{else}}- Include a body if the changes are complex
+{{end}}{{if .MaxLength}}- Keep the description under {{.MaxLength}} characters
+{{end}}- Be concise and specific
+- Use imperative mood (e.g., 'add' not 'added')
+
+Return your response as JSON in this exact format:
+{
+  "type": "feat",
+  "scope": "api" (or empty string if no scope),
+  "description": "add user authentication",
+  "body": "Detailed explanation..." (or empty string if one-line),
+  "breaking": false
+}
+
+Git diff:
+```
+{{.Diff}}
+```
