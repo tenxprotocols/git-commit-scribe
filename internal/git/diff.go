@@ -79,6 +79,19 @@ func GetStagedFiles() ([]string, error) {
 	return files, nil
 }
 
+// ValidateRepository validates that we're in a git repository with staged changes
+func ValidateRepository() error {
+	if !isGitRepo() {
+		return fmt.Errorf("not a git repository (or any parent up to mount point /)")
+	}
+
+	if !hasStagedChanges() {
+		return fmt.Errorf("no changes added to commit (use \"git add\" to stage changes)")
+	}
+
+	return nil
+}
+
 // isGitRepo checks if current directory is in a git repository
 func isGitRepo() bool {
 	cmd := exec.Command("git", "rev-parse", "--git-dir")

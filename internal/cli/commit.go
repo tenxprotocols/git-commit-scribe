@@ -42,6 +42,11 @@ type CommitCmd struct {
 
 // Run executes the commit command
 func (c *CommitCmd) Run(ctx *Context) error {
+	// Validate git repository and staged changes first (fail early)
+	if err := git.ValidateRepository(); err != nil {
+		return err
+	}
+
 	// Load configuration
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 	cfg, err := loader.Load()
