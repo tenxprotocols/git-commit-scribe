@@ -30,6 +30,10 @@ type CommitCmd struct {
 	OneLine     bool   `short:"o" help:"Generate a one-line commit message"`
 	Description int    `help:"Max description length" default:"72"`
 
+	// Prompt customization
+	Prompt     string `help:"Custom prompt template (file path or inline text)" type:"string"`
+	PromptFile string `help:"Path to custom prompt template file" type:"path"`
+
 	// File handling
 	MaxFiles         int  `help:"Maximum number of files to analyze" default:"50"`
 	IgnoreGenerated  bool `help:"Ignore auto-generated files" default:"true"`
@@ -184,6 +188,20 @@ func (c *CommitCmd) Run(ctx *Context) error {
 			fmt.Printf("Generating commit message using %s...\n", cfg.Model)
 		}
 
+		// Determine which custom prompt to use (file takes precedence)
+		customPrompt := ""
+		if c.PromptFile != "" {
+			customPrompt = c.PromptFile
+			if CLI.Verbose {
+				fmt.Printf("Using custom prompt from file: %s\n", c.PromptFile)
+			}
+		} else if c.Prompt != "" {
+			customPrompt = c.Prompt
+			if CLI.Verbose {
+				fmt.Println("Using custom inline prompt")
+			}
+		}
+
 		genOpts := ai.GenerateOptions{
 			Diff:           diff,
 			Type:           c.Type,
@@ -193,6 +211,7 @@ func (c *CommitCmd) Run(ctx *Context) error {
 			MaxLength:      cfg.Commit.DescriptionLength,
 			AvailableTypes: cfg.Types,
 			Temperature:    cfg.AI.Temperature,
+			CustomPrompt:   customPrompt,
 		}
 
 		aiCtx, cancel := context.WithTimeout(context.Background(), cfg.AI.Timeout)
