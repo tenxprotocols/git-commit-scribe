@@ -185,3 +185,8 @@ func GetCacheDir(configDir string) string {
 	}
 	return filepath.Join(cacheDir, "gscribe")
 }
+
+// UnmarshalConfig unmarshals YAML data into a Config struct
+func UnmarshalConfig(data []byte, cfg *Config) error {
+	return yaml.Unmarshal(data, cfg)
+}
