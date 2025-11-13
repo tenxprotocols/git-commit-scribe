@@ -75,20 +75,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-      
-      - name: Install Task
-        uses: arduino/setup-task@v2
-        with:
-          version: 3.x
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      
+            
       - name: Run golangci-lint
-        run: task lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.6.1
+          args: --timeout=5m
+          skip-cache: false
 
   build:
     name: Build
