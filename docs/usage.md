@@ -257,9 +257,302 @@ export GSCRIBE_VERBOSE=true
 gscribe
 ```
 
+## Advanced Usage
+
+### Environment-Specific Configuration
+
+Use different configurations based on environment:
+
+```bash
+# Development - more verbose
+export GSCRIBE_VERBOSE=true
+export GSCRIBE_MODEL="openai/gpt-3.5-turbo"  # Faster, cheaper
+gscribe
+
+# Production - more careful
+export GSCRIBE_VERBOSE=false
+export GSCRIBE_MODEL="anthropic/claude-3.5-sonnet"  # Better quality
+gscribe
+```
+
+### Custom Workflows
+
+#### Multi-Repository Workflow
+
+Working across multiple repositories:
+
+```bash
+# Script to commit changes across repos
+for repo in ~/projects/*/; do
+  cd "$repo"
+  if [[ -n $(git status -s) ]]; then
+    echo "Processing $repo..."
+    git add .
+    gscribe -y
+  fi
+done
+```
+
+#### Feature Branch Workflow
+
+```bash
+# Create feature branch
+git checkout -b feat/user-profile
+
+# Make incremental commits
+git add src/profile/avatar.js
+gscribe -t feat -s profile -e
+# ✨ feat(profile): add avatar upload
+
+git add src/profile/settings.js
+gscribe -t feat -s profile -e
+# ✨ feat(profile): add user settings page
+
+git add tests/profile/
+gscribe -t test -s profile
+# test(profile): add profile component tests
+
+# Push feature
+git push -u origin feat/user-profile
+```
+
+#### Hotfix Workflow
+
+```bash
+# Create hotfix branch from main
+git checkout main
+git checkout -b hotfix/security-patch
+
+# Make fix
+git add src/auth/validator.js
+gscribe -t fix -s security --breaking
+# fix(security)!: patch authentication vulnerability
+# BREAKING CHANGE: Updated token validation algorithm
+
+# Push and merge immediately
+git push -u origin hotfix/security-patch
+```
+
+### Integration with Git Aliases
+
+Add gscribe to your git aliases:
+
+```bash
+# In ~/.gitconfig
+[alias]
+  cm = !git add . && gscribe -y
+  cmf = !git add . && gscribe -t feat -y
+  cmx = !git add . && gscribe -t fix -y
+  cmd = !git add . && gscribe -t docs -y
+  cmp = !git add . && gscribe -yp
+```
+
+Usage:
+```bash
+git cm    # Quick commit
+git cmf   # Feature commit
+git cmx   # Fix commit
+git cmd   # Docs commit  
+git cmp   # Commit and push
+```
+
+### Batch Processing
+
+#### Commit Multiple Directories
+
+```bash
+# Commit each directory separately with appropriate scope
+for dir in src/components/*/; do
+  dirname=$(basename "$dir")
+  git add "$dir"
+  gscribe -t feat -s "components/$dirname" -y
+done
+```
+
+#### Process Files by Type
+
+```bash
+# Commit all documentation
+git add *.md docs/
+gscribe -t docs -o -y
+
+# Commit all tests
+git add **/*.test.js
+gscribe -t test -y
+
+# Commit all style changes
+git add **/*.css **/*.scss
+gscribe -t style -y
+```
+
+### Using with Git Hooks
+
+#### Prepare Commit Message Hook
+
+Create `.git/hooks/prepare-commit-msg`:
+
+```bash
+#!/bin/bash
+# Auto-generate commit message if not provided
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Only generate for normal commits (not merge, squash, etc.)
+if [ -z "$COMMIT_SOURCE" ]; then
+  # Generate message with gscribe
+  gscribe -d > "$COMMIT_MSG_FILE"
+fi
+```
+
+Make executable:
+```bash
+chmod +x .git/hooks/prepare-commit-msg
+```
+
+### Performance Optimization
+
+#### Enable Caching
+
+Significantly speeds up repeated operations:
+
+```bash
+gscribe config set cache.enabled true
+gscribe config set cache.ttl 86400  # 24 hours
+```
+
+#### Optimize for Large Repositories
+
+```bash
+# Increase file limit
+gscribe config set commit.max_files 100
+
+# Use faster model
+gscribe config set model "openai/gpt-3.5-turbo"
+
+# Disable detailed analysis for speed
+gscribe config set ai.temperature 0.3
+```
+
+#### Reduce API Calls
+
+```bash
+# Use one-line mode (shorter prompts)
+gscribe config set commit.one_line true
+
+# Use cache aggressively
+gscribe config set cache.ttl 604800  # 7 days
+```
+
+## Integration Examples
+
+### VS Code Integration
+
+Create a VS Code task (`.vscode/tasks.json`):
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "gscribe: commit",
+      "type": "shell",
+      "command": "gscribe",
+      "problemMatcher": []
+    },
+    {
+      "label": "gscribe: quick commit",
+      "type": "shell",
+      "command": "gscribe -y",
+      "problemMatcher": []
+    },
+    {
+      "label": "gscribe: commit and push",
+      "type": "shell",
+      "command": "gscribe -yp",
+      "problemMatcher": []
+    }
+  ]
+}
+```
+
+### Shell Functions
+
+Add to `.bashrc` or `.zshrc`:
+
+```bash
+# Quick commit function
+gc() {
+  git add .
+  gscribe -y
+}
+
+# Feature commit
+gcf() {
+  git add .
+  gscribe -t feat -s "$1" -y
+}
+
+# Fix commit
+gcx() {
+  git add .
+  gscribe -t fix -s "$1" -y
+}
+
+# Commit with emoji and push
+gcp() {
+  git add .
+  gscribe -e -yp
+}
+```
+
+Usage:
+```bash
+gc           # Quick commit
+gcf api      # Feature commit with scope
+gcx auth     # Fix commit with scope
+gcp          # Commit with emoji and push
+```
+
+### Makefile Integration
+
+Add to `Makefile`:
+
+```makefile
+.PHONY: commit commit-push commit-feat commit-fix
+
+commit:
+	@git add .
+	@gscribe
+
+commit-push:
+	@git add .
+	@gscribe -yp
+
+commit-feat:
+	@git add .
+	@gscribe -t feat -y
+
+commit-fix:
+	@git add .
+	@gscribe -t fix -y
+```
+
+Usage:
+```bash
+make commit        # Interactive commit
+make commit-push   # Commit and push
+make commit-feat   # Feature commit
+make commit-fix    # Fix commit
+```
+
 ## Troubleshooting
 
-### No Staged Changes
+For detailed troubleshooting information, see the [Troubleshooting Guide](troubleshooting.md).
+
+### Quick Fixes
+
+#### No Staged Changes
 
 ```
 Error: no staged changes to commit
@@ -270,7 +563,7 @@ Solution: Stage your changes first:
 git add <files>
 ```
 
-### API Key Not Configured
+#### API Key Not Configured
 
 ```
 Error: API key not configured
@@ -281,7 +574,7 @@ Solution: Initialize your configuration:
 gscribe config init
 ```
 
-### Too Many Files
+#### Too Many Files
 
 ```
 Error: too many files changed (75), max is 50
@@ -292,7 +585,7 @@ Solution: Either increase the limit or commit in batches:
 gscribe --max-files 100
 ```
 
-### Rate Limiting
+#### Rate Limiting
 
 If you hit API rate limits, the tool will automatically retry with exponential backoff.
 
@@ -301,3 +594,11 @@ You can adjust retry behavior in the config:
 ai:
   max_retries: 5
   rate_limit_wait: 10s
+```
+
+## See Also
+
+- [Configuration Guide](configuration.md) - Detailed configuration options
+- [CLI Reference](cli-reference.md) - Complete command reference
+- [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
+- [Workflows and Best Practices](workflows.md) - Advanced workflows and team practices
