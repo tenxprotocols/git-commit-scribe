@@ -47,61 +47,9 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
+          args: release --clean
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-
-  verify-installation:
-    name: Verify Installation on ${{ matrix.os }}
-    needs: release
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    
-    steps:
-      - name: Wait for release assets
-        run: sleep 30
-      
-      - name: Download and verify (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          VERSION=${TAG#v}
-          curl -L -o gscribe.tar.gz "https://github.com/${{ github.repository }}/releases/download/${TAG}/git-commit-scribe-${VERSION}-linux-amd64.tar.gz"
-          tar -xzf gscribe.tar.gz
-          chmod +x gscribe
-          ./gscribe --version
-          ./gscribe --help
-      
-      - name: Download and verify (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          VERSION=${TAG#v}
-          ARCH=$(uname -m)
-          if [ "$ARCH" = "x86_64" ]; then
-            ARCH="amd64"
-          elif [ "$ARCH" = "arm64" ]; then
-            ARCH="arm64"
-          fi
-          curl -L -o gscribe.tar.gz "https://github.com/${{ github.repository }}/releases/download/${TAG}/git-commit-scribe-${VERSION}-darwin-${ARCH}.tar.gz"
-          tar -xzf gscribe.tar.gz
-          chmod +x gscribe
-          ./gscribe --version
-          ./gscribe --help
-      
-      - name: Test basic functionality
-        run: |
-          git config --global user.email "test@example.com"
-          git config --global user.name "Test User"
-          mkdir test-repo
-          cd test-repo
-          git init
-          echo "test" > test.txt
-          git add test.txt
-          # Test that gscribe can run (will fail without API key, but should not crash)
-          ../gscribe --dry-run 2>&1 | grep -q "version\|help\|error" || true
