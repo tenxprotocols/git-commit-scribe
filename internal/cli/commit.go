@@ -46,7 +46,7 @@ func (c *CommitCmd) generateCommitMessage(cfg *config.Config, diff string, addit
 	// Initialize AI provider
 	var provider ai.Provider
 	var err error
-	
+
 	switch cfg.Provider {
 	case "openrouter":
 		if cfg.APIKey == "" {
@@ -82,7 +82,7 @@ func (c *CommitCmd) generateCommitMessage(cfg *config.Config, diff string, addit
 		CustomPrompt:      customPrompt,
 		AdditionalContext: additionalContext,
 	}
-	
+
 	// Slightly higher temperature for variation when regenerating with context
 	if additionalContext != "" {
 		genOpts.Temperature += 0.1
@@ -101,18 +101,12 @@ func (c *CommitCmd) generateCommitMessage(cfg *config.Config, diff string, addit
 	return result, nil
 }
 
-// Run executes the commit command
-func (c *CommitCmd) Run(ctx *Context) error {
-	// Validate git repository and staged changes first (fail early)
-	if err := git.ValidateRepository(); err != nil {
-		return err
-	}
-
-	// Load configuration
+// loadAndOverrideConfig loads configuration and applies CLI flag overrides
+func (c *CommitCmd) loadAndOverrideConfig() (*config.Config, error) {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 	cfg, err := loader.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Override config with CLI flags
@@ -146,14 +140,17 @@ func (c *CommitCmd) Run(ctx *Context) error {
 		cfg.Commit.AutoPush = true
 	}
 
-	// Get staged diff
+	return cfg, nil
+}
+
+// getStagedDiffWithProgress gets the staged diff and shows progress
+func (c *CommitCmd) getStagedDiffWithProgress() (string, error) {
 	diffOpts := git.DiffOptions{
 		MaxFiles:         c.MaxFiles,
 		IgnoreGenerated:  c.IgnoreGenerated,
 		IgnoreWhitespace: c.IgnoreWhitespace,
 	}
 
-	// Show progress for getting staged changes
 	var spinner *Spinner
 	if !CLI.Verbose {
 		spinner = NewSpinner("Getting staged changes...")
@@ -167,7 +164,7 @@ func (c *CommitCmd) Run(ctx *Context) error {
 		if spinner != nil {
 			spinner.Error("Failed to get staged diff")
 		}
-		return fmt.Errorf("failed to get staged diff: %w", err)
+		return "", fmt.Errorf("failed to get staged diff: %w", err)
 	}
 
 	if spinner != nil {
@@ -178,56 +175,51 @@ func (c *CommitCmd) Run(ctx *Context) error {
 		PrintSuccess(fmt.Sprintf("Analyzing %d staged file(s)", len(files)))
 	}
 
-	// Initialize cache if enabled
-	var cacheInstance cache.Cache
-	if cfg.Cache.Enabled {
-		cacheDir := config.GetCacheDir(loader.GetConfigDir())
-		
-		// Create memory cache
-		memCache := cache.NewMemoryCache(cfg.Cache.MaxMemoryMB, time.Duration(cfg.Cache.TTL)*time.Second)
-		
-		// Create disk cache
-		diskCache, err := cache.NewDiskCache(cacheDir, cfg.Cache.MaxDiskMB, time.Duration(cfg.Cache.TTL)*time.Second)
-		if err != nil {
-			if CLI.Verbose {
-				PrintWarning(fmt.Sprintf("Failed to initialize disk cache: %v", err))
-			}
-			// Fall back to memory-only cache
-			cacheInstance = memCache
-		} else {
-			// Use multi-level cache
-			cacheInstance = cache.NewMultiCache(memCache, diskCache)
-		}
-		
-		if CLI.Verbose {
-			PrintInfo("Cache initialized")
-		}
+	return diff, nil
+}
+
+// initializeCache creates and initializes the cache if enabled
+func (c *CommitCmd) initializeCache(cfg *config.Config, loader *config.Loader) cache.Cache {
+	if !cfg.Cache.Enabled {
+		return nil
 	}
 
-	// Generate cache key from diff and options
-	cacheKey := cache.GenerateKey(
-		diff,
-		c.Type,
-		c.Scope,
-		fmt.Sprintf("%v", c.Breaking),
-		fmt.Sprintf("%v", cfg.Commit.OneLine),
-		fmt.Sprintf("%d", cfg.Commit.DescriptionLength),
-		cfg.Model,
-	)
+	cacheDir := config.GetCacheDir(loader.GetConfigDir())
 
+	// Create memory cache
+	memCache := cache.NewMemoryCache(cfg.Cache.MaxMemoryMB, time.Duration(cfg.Cache.TTL)*time.Second)
+
+	// Create disk cache
+	diskCache, err := cache.NewDiskCache(cacheDir, cfg.Cache.MaxDiskMB, time.Duration(cfg.Cache.TTL)*time.Second)
+	if err != nil {
+		if CLI.Verbose {
+			PrintWarning(fmt.Sprintf("Failed to initialize disk cache: %v", err))
+		}
+		// Fall back to memory-only cache
+		return memCache
+	}
+
+	// Use multi-level cache
+	if CLI.Verbose {
+		PrintInfo("Cache initialized")
+	}
+	return cache.NewMultiCache(memCache, diskCache)
+}
+
+// getOrGenerateCommitMessage retrieves from cache or generates a new commit message
+func (c *CommitCmd) getOrGenerateCommitMessage(cfg *config.Config, diff string, cacheInstance cache.Cache, cacheKey string) (*ai.CommitResult, error) {
 	// Try to get from cache
-	var result *ai.CommitResult
 	if cfg.Cache.Enabled && cacheInstance != nil {
 		cacheCtx := context.Background()
 		if cached, found, err := cacheInstance.Get(cacheCtx, cacheKey); err == nil && found {
 			if CLI.Verbose {
 				PrintSuccess("Using cached commit message")
 			}
-			
+
 			// Deserialize cached result
 			var cachedResult ai.CommitResult
 			if err := json.Unmarshal([]byte(cached), &cachedResult); err == nil {
-				result = &cachedResult
+				return &cachedResult, nil
 			} else if CLI.Verbose {
 				PrintWarning(fmt.Sprintf("Failed to deserialize cached result: %v", err))
 			}
@@ -235,32 +227,34 @@ func (c *CommitCmd) Run(ctx *Context) error {
 	}
 
 	// If not in cache, generate with AI
-	if result == nil {
-		if CLI.Verbose {
-			if c.PromptFile != "" {
-				PrintInfo(fmt.Sprintf("Using custom prompt from file: %s", c.PromptFile))
-			} else if c.Prompt != "" {
-				PrintInfo("Using custom inline prompt")
-			}
+	if CLI.Verbose {
+		if c.PromptFile != "" {
+			PrintInfo(fmt.Sprintf("Using custom prompt from file: %s", c.PromptFile))
+		} else if c.Prompt != "" {
+			PrintInfo("Using custom inline prompt")
 		}
-		
-		result, err = c.generateCommitMessage(cfg, diff, "")
-		if err != nil {
-			return err
-		}
+	}
 
-		// Store in cache
-		if cfg.Cache.Enabled && cacheInstance != nil {
-			cacheCtx := context.Background()
-			if serialized, err := json.Marshal(result); err == nil {
-				if err := cacheInstance.Set(cacheCtx, cacheKey, string(serialized)); err != nil && CLI.Verbose {
-					PrintWarning(fmt.Sprintf("Failed to cache result: %v", err))
-				}
+	result, err := c.generateCommitMessage(cfg, diff, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache
+	if cfg.Cache.Enabled && cacheInstance != nil {
+		cacheCtx := context.Background()
+		if serialized, err := json.Marshal(result); err == nil {
+			if err := cacheInstance.Set(cacheCtx, cacheKey, string(serialized)); err != nil && CLI.Verbose {
+				PrintWarning(fmt.Sprintf("Failed to cache result: %v", err))
 			}
 		}
 	}
 
-	// Format the commit message
+	return result, nil
+}
+
+// formatCommitMessage formats the AI result into a commit message
+func (c *CommitCmd) formatCommitMessage(result *ai.CommitResult, cfg *config.Config) string {
 	msg := &conventional.CommitMessage{
 		Type:        result.Type,
 		Scope:       result.Scope,
@@ -275,15 +269,128 @@ func (c *CommitCmd) Run(ctx *Context) error {
 
 	// Validate the message
 	if err := msg.Validate(cfg.Types); err != nil {
-		return fmt.Errorf("invalid commit message: %w", err)
+		return ""
 	}
 
 	// Format the final message
-	var commitMsg string
 	if cfg.Commit.OneLine {
-		commitMsg = msg.FormatOneLine()
-	} else {
-		commitMsg = msg.Format()
+		return msg.FormatOneLine()
+	}
+	return msg.Format()
+}
+
+// handleUserInteraction handles the interactive prompt loop for commit confirmation
+func (c *CommitCmd) handleUserInteraction(commitMsg string, cfg *config.Config, diff string) (string, bool, error) {
+	for {
+		fmt.Println()
+		choice, err := PromptChoice("What would you like to do?", []string{
+			"Create commit with this message",
+			"Edit message before committing",
+			"Regenerate message",
+			"Cancel",
+		}, 1) // Default to option 1
+		if err != nil {
+			return "", false, fmt.Errorf("failed to read input: %w", err)
+		}
+
+		switch choice {
+		case 1:
+			// Continue with commit
+			return commitMsg, true, nil
+		case 2:
+			// Edit message
+			edited, err := EditText(commitMsg)
+			if err != nil {
+				return "", false, fmt.Errorf("failed to edit message: %w", err)
+			}
+			if edited == "" {
+				PrintWarning("Empty commit message, cancelling")
+				return "", false, nil
+			}
+			commitMsg = edited
+
+			// Show edited message
+			FormatSubHeader("Edited Commit Message")
+			PrintSeparator()
+			PrintCommitMessage(commitMsg)
+			PrintSeparator()
+			// Loop back to show choices again
+		case 3:
+			// Regenerate with optional additional context
+			fmt.Println()
+			additionalContext, err := PromptMultilineText("Provide additional context for regeneration (optional):")
+			if err != nil {
+				return "", false, fmt.Errorf("failed to read additional context: %w", err)
+			}
+
+			result, err := c.generateCommitMessage(cfg, diff, additionalContext)
+			if err != nil {
+				return "", false, err
+			}
+
+			commitMsg = c.formatCommitMessage(result, cfg)
+			if commitMsg == "" {
+				return "", false, fmt.Errorf("failed to format commit message")
+			}
+
+			// Display the regenerated message
+			FormatSubHeader("Regenerated Commit Message")
+			PrintSeparator()
+			PrintCommitMessage(commitMsg)
+			PrintSeparator()
+			// Loop back to show choices again
+		case 0, 4:
+			// Cancel
+			PrintInfo("Commit cancelled")
+			return "", false, nil
+		}
+	}
+}
+
+// Run executes the commit command
+func (c *CommitCmd) Run(_ *Context) error {
+	// Validate git repository and staged changes first (fail early)
+	if err := git.ValidateRepository(); err != nil {
+		return err
+	}
+
+	// Load configuration
+	cfg, err := c.loadAndOverrideConfig()
+	if err != nil {
+		return err
+	}
+
+	// Get staged diff
+	diff, err := c.getStagedDiffWithProgress()
+	if err != nil {
+		return err
+	}
+
+	// Initialize cache if enabled
+	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
+	cacheInstance := c.initializeCache(cfg, loader)
+
+	// Generate cache key from diff and options
+	cacheKey := cache.GenerateKey(
+		diff,
+		c.Type,
+		c.Scope,
+		fmt.Sprintf("%v", c.Breaking),
+		fmt.Sprintf("%v", cfg.Commit.OneLine),
+		fmt.Sprintf("%d", cfg.Commit.DescriptionLength),
+		cfg.Model,
+	)
+
+	// Get or generate commit message
+	result, err := c.getOrGenerateCommitMessage(cfg, diff, cacheInstance, cacheKey)
+	if err != nil {
+		return err
+	}
+
+	// Format the commit message
+	commitMsg := c.formatCommitMessage(result, cfg)
+	if commitMsg == "" {
+		return fmt.Errorf("failed to format commit message")
 	}
 
 	// Display the generated message with syntax highlighting
@@ -300,93 +407,18 @@ func (c *CommitCmd) Run(ctx *Context) error {
 
 	// Confirm with user unless --yes flag is set
 	if cfg.Commit.Confirm {
-		for {
-			fmt.Println()
-			choice, err := PromptChoice("What would you like to do?", []string{
-				"Create commit with this message",
-				"Edit message before committing",
-				"Regenerate message",
-				"Cancel",
-			}, 1) // Default to option 1
-			if err != nil {
-				return fmt.Errorf("failed to read input: %w", err)
-			}
-
-			switch choice {
-			case 1:
-				// Continue with commit - break out of loop
-				goto createCommit
-			case 2:
-				// Edit message
-				edited, err := EditText(commitMsg)
-				if err != nil {
-					return fmt.Errorf("failed to edit message: %w", err)
-				}
-				if edited == "" {
-					PrintWarning("Empty commit message, cancelling")
-					return nil
-				}
-				commitMsg = edited
-				
-				// Show edited message
-				FormatSubHeader("Edited Commit Message")
-				PrintSeparator()
-				PrintCommitMessage(commitMsg)
-				PrintSeparator()
-				// Loop back to show choices again
-			case 3:
-				// Regenerate with optional additional context
-				fmt.Println()
-				additionalContext, err := PromptMultilineText("Provide additional context for regeneration (optional):")
-				if err != nil {
-					return fmt.Errorf("failed to read additional context: %w", err)
-				}
-				
-				result, err = c.generateCommitMessage(cfg, diff, additionalContext)
-				if err != nil {
-					return err
-				}
-				
-				// Format the new commit message
-				msg = &conventional.CommitMessage{
-					Type:        result.Type,
-					Scope:       result.Scope,
-					Breaking:    result.Breaking || c.Breaking,
-					Description: result.Description,
-					Body:        result.Body,
-					Emoji:       cfg.Commit.Emoji,
-				}
-				
-				msg.TruncateDescription(cfg.Commit.DescriptionLength)
-				
-				if err := msg.Validate(cfg.Types); err != nil {
-					return fmt.Errorf("invalid commit message: %w", err)
-				}
-				
-				if cfg.Commit.OneLine {
-					commitMsg = msg.FormatOneLine()
-				} else {
-					commitMsg = msg.Format()
-				}
-				
-				// Display the regenerated message
-				FormatSubHeader("Regenerated Commit Message")
-				PrintSeparator()
-				PrintCommitMessage(commitMsg)
-				PrintSeparator()
-				// Loop back to show choices again
-			case 0, 4:
-				// Cancel
-				PrintInfo("Commit cancelled")
-				return nil
-			}
+		var proceed bool
+		commitMsg, proceed, err = c.handleUserInteraction(commitMsg, cfg, diff)
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			return nil
 		}
 	}
 
-createCommit:
-
 	// Create the commit
-	spinner = NewSpinner("Creating commit...")
+	spinner := NewSpinner("Creating commit...")
 	spinner.Start()
 
 	if err := git.CreateCommit(commitMsg); err != nil {

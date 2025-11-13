@@ -13,7 +13,7 @@ import (
 
 // readSecureInput reads input from stdin without echoing (for passwords/API keys)
 func readSecureInput() (string, error) {
-	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+	bytePassword, err := term.ReadPassword(syscall.Stdin)
 	if err != nil {
 		return "", err
 	}
@@ -25,7 +25,7 @@ func readSecureInput() (string, error) {
 func displayConfig(cfg *config.Config) {
 	fmt.Printf("Provider: %s\n", cfg.Provider)
 	fmt.Printf("Model: %s\n", cfg.Model)
-	
+
 	// Mask API key for security
 	if cfg.APIKey != "" {
 		masked := cfg.APIKey

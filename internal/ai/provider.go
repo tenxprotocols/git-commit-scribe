@@ -12,15 +12,15 @@ type Provider interface {
 
 // GenerateOptions configures commit message generation
 type GenerateOptions struct {
-	Diff             string
-	Type             string
-	Scope            string
-	Breaking         bool
-	OneLine          bool
-	MaxLength        int
-	AvailableTypes   map[string]string
-	Temperature      float64
-	CustomPrompt     string // Custom prompt template (overrides default)
+	Diff              string
+	Type              string
+	Scope             string
+	Breaking          bool
+	OneLine           bool
+	MaxLength         int
+	AvailableTypes    map[string]string
+	Temperature       float64
+	CustomPrompt      string // Custom prompt template (overrides default)
 	AdditionalContext string // Additional context for regeneration
 }
 

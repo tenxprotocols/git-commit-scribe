@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -33,7 +34,8 @@ func GetStagedDiff(opts DiffOptions) (string, error) {
 		args = append(args, "--ignore-all-space", "--ignore-blank-lines")
 	}
 
-	cmd := exec.Command("git", args...)
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "git", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -44,6 +46,16 @@ func GetStagedDiff(opts DiffOptions) (string, error) {
 
 	diff := stdout.String()
 	if diff == "" {
+		// Check if there are changes when not ignoring whitespace
+		if opts.IgnoreWhitespace {
+			ctx := context.Background()
+			checkCmd := exec.CommandContext(ctx, "git", "diff", "--cached")
+			var checkOut bytes.Buffer
+			checkCmd.Stdout = &checkOut
+			if checkCmd.Run() == nil && checkOut.Len() > 0 {
+				return "", fmt.Errorf("only whitespace changes detected (use --ignore-whitespace=false to include them)")
+			}
+		}
 		return "", fmt.Errorf("no diff content found")
 	}
 
@@ -63,7 +75,8 @@ func GetStagedDiff(opts DiffOptions) (string, error) {
 
 // GetStagedFiles returns a list of staged file paths
 func GetStagedFiles() ([]string, error) {
-	cmd := exec.Command("git", "diff", "--cached", "--name-only")
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "git", "diff", "--cached", "--name-only")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
@@ -94,13 +107,15 @@ func ValidateRepository() error {
 
 // isGitRepo checks if current directory is in a git repository
 func isGitRepo() bool {
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--git-dir")
 	return cmd.Run() == nil
 }
 
 // hasStagedChanges checks if there are any staged changes
 func hasStagedChanges() bool {
-	cmd := exec.Command("git", "diff", "--cached", "--quiet")
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "git", "diff", "--cached", "--quiet")
 	// Returns non-zero if there are differences
 	return cmd.Run() != nil
 }
@@ -109,7 +124,7 @@ func hasStagedChanges() bool {
 func filterGeneratedFiles(diff string) string {
 	// Split diff into individual file diffs
 	fileDiffs := SplitDiffByFiles(diff)
-	
+
 	// Common patterns for generated files (matching the "diff --git" line)
 	patterns := []*regexp.Regexp{
 		regexp.MustCompile(`^diff --git a/.*\.lock b/.*\.lock$`),
@@ -125,14 +140,14 @@ func filterGeneratedFiles(diff string) string {
 	for _, fileDiff := range fileDiffs {
 		isGenerated := false
 		firstLine := strings.Split(fileDiff, "\n")[0]
-		
+
 		for _, pattern := range patterns {
 			if pattern.MatchString(firstLine) {
 				isGenerated = true
 				break
 			}
 		}
-		
+
 		if !isGenerated {
 			filtered = append(filtered, fileDiff)
 		}
