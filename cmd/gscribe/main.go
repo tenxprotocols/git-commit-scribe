@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	version   = "dev"		 	// Set via ldflags during build
-	commit    = "none"  	// Set via ldflags during build
+	version   = "dev"     // Set via ldflags during build
+	commit    = "none"    // Set via ldflags during build
 	buildDate = "unknown" // Set via ldflags during build
 )
 
