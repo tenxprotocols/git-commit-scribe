@@ -41,6 +41,66 @@ type CommitCmd struct {
 	Push   bool `short:"p" help:"Push changes to remote after commit"`
 }
 
+// generateCommitMessage generates a commit message using AI
+func (c *CommitCmd) generateCommitMessage(cfg *config.Config, diff string, additionalContext string) (*ai.CommitResult, error) {
+	// Initialize AI provider
+	var provider ai.Provider
+	var err error
+	
+	switch cfg.Provider {
+	case "openrouter":
+		if cfg.APIKey == "" {
+			return nil, fmt.Errorf("API key not configured. Run 'gscribe config init' or set GSCRIBE_API_KEY environment variable")
+		}
+		provider, err = ai.NewOpenRouterProvider(cfg.APIKey, cfg.Model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create AI provider: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)
+	}
+
+	// Determine which custom prompt to use
+	customPrompt := c.PromptFile
+	if c.Prompt != "" {
+		customPrompt = c.Prompt
+	}
+
+	// Show progress spinner for AI generation
+	spinner := NewSpinner(fmt.Sprintf("Generating commit message using %s...", cfg.Model))
+	spinner.Start()
+
+	genOpts := ai.GenerateOptions{
+		Diff:              diff,
+		Type:              c.Type,
+		Scope:             c.Scope,
+		Breaking:          c.Breaking,
+		OneLine:           cfg.Commit.OneLine,
+		MaxLength:         cfg.Commit.DescriptionLength,
+		AvailableTypes:    cfg.Types,
+		Temperature:       cfg.AI.Temperature,
+		CustomPrompt:      customPrompt,
+		AdditionalContext: additionalContext,
+	}
+	
+	// Slightly higher temperature for variation when regenerating with context
+	if additionalContext != "" {
+		genOpts.Temperature += 0.1
+	}
+
+	aiCtx, cancel := context.WithTimeout(context.Background(), cfg.AI.Timeout)
+	defer cancel()
+
+	result, err := provider.GenerateCommitMessage(aiCtx, genOpts)
+	if err != nil {
+		spinner.Error("Failed to generate commit message")
+		return nil, fmt.Errorf("failed to generate commit message: %w", err)
+	}
+
+	spinner.Success("Commit message generated")
+	return result, nil
+}
+
 // Run executes the commit command
 func (c *CommitCmd) Run(ctx *Context) error {
 	// Validate git repository and staged changes first (fail early)
@@ -176,61 +236,18 @@ func (c *CommitCmd) Run(ctx *Context) error {
 
 	// If not in cache, generate with AI
 	if result == nil {
-		// Initialize AI provider
-		var provider ai.Provider
-		switch cfg.Provider {
-		case "openrouter":
-			if cfg.APIKey == "" {
-				return fmt.Errorf("API key not configured. Run 'gscribe config init' or set GSCRIBE_API_KEY environment variable")
-			}
-			provider, err = ai.NewOpenRouterProvider(cfg.APIKey, cfg.Model)
-			if err != nil {
-				return fmt.Errorf("failed to create AI provider: %w", err)
-			}
-		default:
-			return fmt.Errorf("unsupported provider: %s", cfg.Provider)
-		}
-
-		// Determine which custom prompt to use (file takes precedence)
-		customPrompt := ""
-		if c.PromptFile != "" {
-			customPrompt = c.PromptFile
-			if CLI.Verbose {
+		if CLI.Verbose {
+			if c.PromptFile != "" {
 				PrintInfo(fmt.Sprintf("Using custom prompt from file: %s", c.PromptFile))
-			}
-		} else if c.Prompt != "" {
-			customPrompt = c.Prompt
-			if CLI.Verbose {
+			} else if c.Prompt != "" {
 				PrintInfo("Using custom inline prompt")
 			}
 		}
-
-		// Show progress spinner for AI generation
-		spinner = NewSpinner(fmt.Sprintf("Generating commit message using %s...", cfg.Model))
-		spinner.Start()
-
-		genOpts := ai.GenerateOptions{
-			Diff:           diff,
-			Type:           c.Type,
-			Scope:          c.Scope,
-			Breaking:       c.Breaking,
-			OneLine:        cfg.Commit.OneLine,
-			MaxLength:      cfg.Commit.DescriptionLength,
-			AvailableTypes: cfg.Types,
-			Temperature:    cfg.AI.Temperature,
-			CustomPrompt:   customPrompt,
-		}
-
-		aiCtx, cancel := context.WithTimeout(context.Background(), cfg.AI.Timeout)
-		defer cancel()
-
-		result, err = provider.GenerateCommitMessage(aiCtx, genOpts)
+		
+		result, err = c.generateCommitMessage(cfg, diff, "")
 		if err != nil {
-			spinner.Error("Failed to generate commit message")
-			return fmt.Errorf("failed to generate commit message: %w", err)
+			return err
 		}
-
-		spinner.Success("Commit message generated")
 
 		// Store in cache
 		if cfg.Cache.Enabled && cacheInstance != nil {
@@ -283,58 +300,90 @@ func (c *CommitCmd) Run(ctx *Context) error {
 
 	// Confirm with user unless --yes flag is set
 	if cfg.Commit.Confirm {
-		fmt.Println()
-		choice, err := PromptChoice("What would you like to do?", []string{
-			"Create commit with this message",
-			"Edit message before committing",
-			"Regenerate message",
-			"Cancel",
-		})
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
-		}
-
-		switch choice {
-		case 1:
-			// Continue with commit
-		case 2:
-			// Edit message
-			edited, err := EditText(commitMsg)
-			if err != nil {
-				return fmt.Errorf("failed to edit message: %w", err)
-			}
-			if edited == "" {
-				PrintWarning("Empty commit message, cancelling")
-				return nil
-			}
-			commitMsg = edited
-			
-			// Show edited message
-			FormatSubHeader("Edited Commit Message")
-			PrintSeparator()
-			PrintCommitMessage(commitMsg)
-			PrintSeparator()
+		for {
 			fmt.Println()
-			
-			// Confirm edited message
-			confirm, err := PromptYesNo("Create commit with edited message?", true)
+			choice, err := PromptChoice("What would you like to do?", []string{
+				"Create commit with this message",
+				"Edit message before committing",
+				"Regenerate message",
+				"Cancel",
+			}, 1) // Default to option 1
 			if err != nil {
-				return fmt.Errorf("failed to read confirmation: %w", err)
+				return fmt.Errorf("failed to read input: %w", err)
 			}
-			if !confirm {
+
+			switch choice {
+			case 1:
+				// Continue with commit - break out of loop
+				goto createCommit
+			case 2:
+				// Edit message
+				edited, err := EditText(commitMsg)
+				if err != nil {
+					return fmt.Errorf("failed to edit message: %w", err)
+				}
+				if edited == "" {
+					PrintWarning("Empty commit message, cancelling")
+					return nil
+				}
+				commitMsg = edited
+				
+				// Show edited message
+				FormatSubHeader("Edited Commit Message")
+				PrintSeparator()
+				PrintCommitMessage(commitMsg)
+				PrintSeparator()
+				// Loop back to show choices again
+			case 3:
+				// Regenerate with optional additional context
+				fmt.Println()
+				additionalContext, err := PromptMultilineText("Provide additional context for regeneration (optional):")
+				if err != nil {
+					return fmt.Errorf("failed to read additional context: %w", err)
+				}
+				
+				result, err = c.generateCommitMessage(cfg, diff, additionalContext)
+				if err != nil {
+					return err
+				}
+				
+				// Format the new commit message
+				msg = &conventional.CommitMessage{
+					Type:        result.Type,
+					Scope:       result.Scope,
+					Breaking:    result.Breaking || c.Breaking,
+					Description: result.Description,
+					Body:        result.Body,
+					Emoji:       cfg.Commit.Emoji,
+				}
+				
+				msg.TruncateDescription(cfg.Commit.DescriptionLength)
+				
+				if err := msg.Validate(cfg.Types); err != nil {
+					return fmt.Errorf("invalid commit message: %w", err)
+				}
+				
+				if cfg.Commit.OneLine {
+					commitMsg = msg.FormatOneLine()
+				} else {
+					commitMsg = msg.Format()
+				}
+				
+				// Display the regenerated message
+				FormatSubHeader("Regenerated Commit Message")
+				PrintSeparator()
+				PrintCommitMessage(commitMsg)
+				PrintSeparator()
+				// Loop back to show choices again
+			case 0, 4:
+				// Cancel
 				PrintInfo("Commit cancelled")
 				return nil
 			}
-		case 3:
-			// Regenerate - for now just cancel and ask user to run again
-			PrintInfo("Commit cancelled. Run the command again to regenerate.")
-			return nil
-		case 0, 4:
-			// Cancel
-			PrintInfo("Commit cancelled")
-			return nil
 		}
 	}
+
+createCommit:
 
 	// Create the commit
 	spinner = NewSpinner("Creating commit...")
