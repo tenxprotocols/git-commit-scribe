@@ -1,5 +1,7 @@
 package cli
 
+import "github.com/alecthomas/kong"
+
 // Context holds runtime context for commands
 type Context struct {
 	Debug bool
@@ -15,6 +17,7 @@ var CLI struct {
 	APIKey     string `help:"API key for AI provider" env:"GSCRIBE_API_KEY"`
 	Verbose    bool   `short:"v" help:"Enable verbose logging" env:"GSCRIBE_VERBOSE"`
 	NoCache    bool   `help:"Disable caching" env:"GSCRIBE_NO_CACHE"`
+	Version    kong.VersionFlag `help:"Show version information"`
 
 	// Commands
 	Commit CommitCmd `cmd:"" help:"Generate and create a git commit" default:"1"`
