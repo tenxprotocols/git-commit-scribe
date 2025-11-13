@@ -29,3 +29,8 @@ Git diff:
 ```
 {{.Diff}}
 ```
+
+{{if .AdditionalContext}}
+Additional context from user:
+{{.AdditionalContext}}
+{{end}}

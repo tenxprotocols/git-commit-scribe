@@ -178,6 +178,13 @@ func (p *OpenRouterProvider) buildDefaultPrompt(opts GenerateOptions) string {
 	sb.WriteString(opts.Diff)
 	sb.WriteString("\n```\n")
 
+	// Add additional context if provided
+	if opts.AdditionalContext != "" {
+		sb.WriteString("\nAdditional context from user:\n")
+		sb.WriteString(opts.AdditionalContext)
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
 }
 

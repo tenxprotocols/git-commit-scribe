@@ -23,29 +23,33 @@ func (c *CacheClearCmd) Run(ctx *Context) error {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 	cacheDir := config.GetCacheDir(loader.GetConfigDir())
 
+	spinner := NewSpinner("Clearing disk cache...")
+	spinner.Start()
+
 	if c.All {
 		// Clear disk cache
 		if _, err := os.Stat(cacheDir); err == nil {
 			if err := os.RemoveAll(cacheDir); err != nil {
+				spinner.Error("Failed to clear disk cache")
 				return fmt.Errorf("failed to clear disk cache: %w", err)
 			}
-			fmt.Println("✓ Disk cache cleared")
+			spinner.Success("Disk cache cleared")
 		} else {
-			fmt.Println("No disk cache found")
+			spinner.Stop()
+			PrintInfo("No disk cache found")
 		}
-	}
-
-	// Note: Memory cache clearing would require a running instance
-	// For now, we'll just clear the disk cache
-	if !c.All {
-		fmt.Println("Clearing disk cache...")
+	} else {
+		// Note: Memory cache clearing would require a running instance
+		// For now, we'll just clear the disk cache
 		if _, err := os.Stat(cacheDir); err == nil {
 			if err := os.RemoveAll(cacheDir); err != nil {
+				spinner.Error("Failed to clear disk cache")
 				return fmt.Errorf("failed to clear disk cache: %w", err)
 			}
-			fmt.Println("✓ Disk cache cleared")
+			spinner.Success("Disk cache cleared")
 		} else {
-			fmt.Println("No disk cache found")
+			spinner.Stop()
+			PrintInfo("No disk cache found")
 		}
 	}
 
@@ -60,24 +64,24 @@ func (c *CacheStatsCmd) Run(ctx *Context) error {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 	cacheDir := config.GetCacheDir(loader.GetConfigDir())
 
-	fmt.Println("Cache Statistics")
-	fmt.Println("═══════════════════════════════════════")
+	FormatHeader("Cache Statistics")
 
 	// Check if cache directory exists
 	if _, err := os.Stat(cacheDir); os.IsNotExist(err) {
-		fmt.Println("\nNo cache directory found")
-		fmt.Printf("Expected location: %s\n", cacheDir)
+		PrintInfo("No cache directory found")
+		PrintDim(fmt.Sprintf("Expected location: %s", cacheDir))
 		return nil
 	}
 
-	fmt.Printf("\nCache directory: %s\n", cacheDir)
+	PrintDim(fmt.Sprintf("Cache directory: %s", cacheDir))
+	fmt.Println()
 
 	// Load cache configuration
 	cfg, err := loader.Load()
 	if err != nil {
-		fmt.Printf("\nWarning: Could not load config: %v\n", err)
+		PrintWarning(fmt.Sprintf("Could not load config: %v", err))
 	} else {
-		fmt.Printf("\nCache settings:\n")
+		PrintInfo("Cache settings:")
 		fmt.Printf("  Enabled: %v\n", cfg.Cache.Enabled)
 		fmt.Printf("  TTL: %d seconds\n", cfg.Cache.TTL)
 		fmt.Printf("  Max memory: %d MB\n", cfg.Cache.MaxMemoryMB)
@@ -103,22 +107,23 @@ func (c *CacheStatsCmd) Run(ctx *Context) error {
 		}
 	}
 
-	fmt.Printf("\nCache entries: %d\n", fileCount)
+	fmt.Println()
+	PrintSuccess(fmt.Sprintf("Cache entries: %d", fileCount))
 	fmt.Printf("Total size: %.2f MB\n", float64(totalSize)/(1024*1024))
 
 	// Show recent cache entries
 	if fileCount > 0 {
-		fmt.Println("\nRecent cache entries:")
+		FormatSubHeader("Recent Cache Entries")
 		count := 0
 		for i := len(entries) - 1; i >= 0 && count < 5; i-- {
 			entry := entries[i]
 			if !entry.IsDir() {
 				info, err := entry.Info()
 				if err == nil {
-					fmt.Printf("  • %s (%.2f KB, modified %s)\n",
-						entry.Name(),
+					fmt.Printf("  • %s ", highlightColor.Sprint(entry.Name()))
+					PrintDim(fmt.Sprintf("(%.2f KB, modified %s)",
 						float64(info.Size())/1024,
-						info.ModTime().Format("2006-01-02 15:04:05"))
+						info.ModTime().Format("2006-01-02 15:04:05")))
 					count++
 				}
 			}

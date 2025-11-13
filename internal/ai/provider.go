@@ -21,6 +21,7 @@ type GenerateOptions struct {
 	AvailableTypes   map[string]string
 	Temperature      float64
 	CustomPrompt     string // Custom prompt template (overrides default)
+	AdditionalContext string // Additional context for regeneration
 }
 
 // CommitResult contains the generated commit message
