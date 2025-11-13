@@ -31,6 +31,12 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
       
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -42,25 +48,16 @@ jobs:
             ${{ runner.os }}-go-${{ matrix.go-version }}-
       
       - name: Download dependencies
-        run: go mod download
-      
-      - name: Verify dependencies
-        run: go mod verify
+        run: task deps
       
       - name: Run go vet
-        run: go vet ./...
+        run: task vet
       
       - name: Run go fmt check
-        run: |
-          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-            echo "The following files need formatting:"
-            gofmt -s -l .
-            exit 1
-          fi
-        shell: bash
+        run: task fmt-check
       
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        run: task test
       
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.23'
@@ -84,25 +81,101 @@ jobs:
         with:
           go-version: '1.23'
       
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v9
+      - name: Install Task
+        uses: arduino/setup-task@v2
         with:
-          version: latest
-          args: --timeout=5m
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Run golangci-lint
+        run: task lint
 
-  # security:
-  #   name: Security Scan
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     GO111MODULE: on
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #     - name: Run Gosec Security Scanner
-  #       uses: securego/gosec@v2.22.10
-  #       with:
-  #         args: '-no-fail -fmt sarif -out results.sarif ./...'
-  #     - name: Upload SARIF file
-  #       uses: github/codeql-action/upload-sarif@v3
-  #       with:
-  #         sarif_file: results.sarif
+  build:
+    name: Build
+    needs: [test, lint]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Linux builds
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            artifact_name: gscribe-linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            artifact_name: gscribe-linux-arm64
+          
+          # macOS builds
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            artifact_name: gscribe-darwin-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            artifact_name: gscribe-darwin-arm64
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      
+      - name: Get version info
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+      
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          task build-release \
+            VERSION=${{ steps.version.outputs.version }} \
+            COMMIT=${{ steps.version.outputs.commit }} \
+            BUILD_DATE=${{ steps.version.outputs.build_date }} \
+            OUTPUT=${{ matrix.artifact_name }}
+      
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}
+          retention-days: 30
+      
+      - name: Run basic verification
+        shell: bash
+        run: |
+          chmod +x ${{ matrix.artifact_name }}
+          ./${{ matrix.artifact_name }} --version || echo "Version check skipped for cross-compiled builds"

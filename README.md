@@ -8,67 +8,32 @@ AI-powered Git commit message generator using Conventional Commits.
 go install github.com/tenxprotocols/git-commit-scribe/cmd/gscribe@latest
 ```
 
-Or build from source:
-
-```bash
-git clone https://github.com/tenxprotocols/git-commit-scribe
-cd git-commit-scribe
-./scripts/build.sh
-```
-
 ## Quick Start
 
 1. Get an API key from [OpenRouter](https://openrouter.ai/)
+2. Initialize: `gscribe config init`
+3. Use: `git add . && gscribe`
 
-2. Initialize configuration:
-```bash
-gscribe config init
-```
-
-3. Stage your changes and generate a commit:
-```bash
-git add .
-gscribe
-```
-
-## Basic Usage
+## Usage
 
 ```bash
-# Generate and create commit (interactive)
-gscribe
-
-# Dry run (preview message only)
-gscribe -d
-
-# Skip confirmation
-gscribe -y
-
-# Specify commit type
-gscribe -t feat
-
-# Add emoji
-gscribe -e
-
-# Push after commit
-gscribe -p
+gscribe              # Generate commit
+gscribe -d           # Dry-run/Preview only
+gscribe -y           # Yes (skip confirmation)
+gscribe -yp          # Generate commit and push
 ```
 
 ## Documentation
 
-- [Configuration](docs/configuration.md) - Configure API keys, models, and settings
-- [Usage Guide](docs/usage.md) - Detailed usage examples and workflows
-- [CLI Reference](docs/cli-reference.md) - Complete command-line options
-- [Custom Prompts](docs/prompts.md) - Customize AI prompts for your workflow
+- [Guide](docs/GUIDE.md) - Setup, usage, workflows
+- [Reference](docs/REFERENCE.md) - CLI flags, config options
+- [Troubleshooting](docs/troubleshooting.md) - Common issues
 
 ## Features
 
-✨ AI-powered commit message generation  
-📝 Full Conventional Commits v1.0.0 support  
-🎯 Customizable AI prompts for your workflow  
-🎨 Optional emoji in commit messages  
-⚙️ Highly configurable via CLI flags or config files  
-💾 Smart caching for faster repeated operations  
-🔒 Secure API key storage  
+- AI-powered commit message generation
+- Includes Conventional Commits v1.0.0 support
+- Highly configurable with smart caching for speed
 
 ## License
 
