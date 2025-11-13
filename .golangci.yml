@@ -1,0 +1,34 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - dupl
+    - gocritic
+    - gocyclo
+    - gosec
+    - misspell
+    - noctx
+    - revive
+    - unconvert
+    - unparam
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - builtin$
+      - examples$
+      - third_party$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - builtin$
+      - examples$
+      - third_party$

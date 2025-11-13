@@ -8,13 +8,13 @@ import (
 
 // MemoryCache implements an in-memory LRU cache
 type MemoryCache struct {
-	mu         sync.RWMutex
-	entries    map[string]*cacheEntry
-	maxSize    int64
+	mu          sync.RWMutex
+	entries     map[string]*cacheEntry
+	maxSize     int64
 	currentSize int64
-	ttl        time.Duration
-	hits       int64
-	misses     int64
+	ttl         time.Duration
+	hits        int64
+	misses      int64
 }
 
 type cacheEntry struct {
@@ -33,7 +33,7 @@ func NewMemoryCache(maxSizeMB int, ttl time.Duration) *MemoryCache {
 }
 
 // Get retrieves a value from the cache
-func (mc *MemoryCache) Get(ctx context.Context, key string) (string, bool, error) {
+func (mc *MemoryCache) Get(_ context.Context, key string) (string, bool, error) {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
 
@@ -54,7 +54,7 @@ func (mc *MemoryCache) Get(ctx context.Context, key string) (string, bool, error
 }
 
 // Set stores a value in the cache
-func (mc *MemoryCache) Set(ctx context.Context, key string, value string) error {
+func (mc *MemoryCache) Set(_ context.Context, key string, value string) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
@@ -82,7 +82,7 @@ func (mc *MemoryCache) Set(ctx context.Context, key string, value string) error 
 }
 
 // Clear clears all entries
-func (mc *MemoryCache) Clear(ctx context.Context) error {
+func (mc *MemoryCache) Clear(_ context.Context) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 

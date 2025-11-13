@@ -37,7 +37,7 @@ func NewDiskCache(dir string, maxSizeMB int, ttl time.Duration) (*DiskCache, err
 }
 
 // Get retrieves a value from disk cache
-func (dc *DiskCache) Get(ctx context.Context, key string) (string, bool, error) {
+func (dc *DiskCache) Get(_ context.Context, key string) (string, bool, error) {
 	filePath := dc.getFilePath(key)
 
 	// Check if file exists
@@ -78,7 +78,7 @@ func (dc *DiskCache) Get(ctx context.Context, key string) (string, bool, error) 
 }
 
 // Set stores a value in disk cache
-func (dc *DiskCache) Set(ctx context.Context, key string, value string) error {
+func (dc *DiskCache) Set(_ context.Context, key string, value string) error {
 	filePath := dc.getFilePath(key)
 
 	// Create entry
@@ -126,7 +126,7 @@ func (dc *DiskCache) Set(ctx context.Context, key string, value string) error {
 }
 
 // Clear removes all cache files
-func (dc *DiskCache) Clear(ctx context.Context) error {
+func (dc *DiskCache) Clear(_ context.Context) error {
 	entries, err := os.ReadDir(dc.dir)
 	if err != nil {
 		return fmt.Errorf("failed to read cache directory: %w", err)

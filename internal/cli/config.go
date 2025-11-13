@@ -25,7 +25,7 @@ type ConfigInitCmd struct {
 }
 
 // Run executes the config init command
-func (c *ConfigInitCmd) Run(ctx *Context) error {
+func (c *ConfigInitCmd) Run(_ *Context) error {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 	configFile := loader.GetConfigFile()
 
@@ -75,7 +75,7 @@ func (c *ConfigInitCmd) Run(ctx *Context) error {
 	// Save configuration
 	spinner := NewSpinner("Saving configuration...")
 	spinner.Start()
-	
+
 	if err := loader.Save(cfg); err != nil {
 		spinner.Error("Failed to save configuration")
 		return fmt.Errorf("failed to save configuration: %w", err)
@@ -95,7 +95,7 @@ type ConfigShowCmd struct {
 }
 
 // Run executes the config show command
-func (c *ConfigShowCmd) Run(ctx *Context) error {
+func (c *ConfigShowCmd) Run(_ *Context) error {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 
 	if c.Global {
@@ -147,11 +147,10 @@ type ConfigSetCmd struct {
 }
 
 // Run executes the config set command
-func (c *ConfigSetCmd) Run(ctx *Context) error {
+func (c *ConfigSetCmd) Run(_ *Context) error {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 
 	var cfg *config.Config
-	var targetFile string
 
 	if c.Repo {
 		// Set in repository config
@@ -159,8 +158,6 @@ func (c *ConfigSetCmd) Run(ctx *Context) error {
 		if repoConfig == "" {
 			return fmt.Errorf("not in a git repository")
 		}
-
-		targetFile = repoConfig
 
 		// Load existing repo config or create new one
 		cfg = config.DefaultConfig()
@@ -175,7 +172,7 @@ func (c *ConfigSetCmd) Run(ctx *Context) error {
 		}
 	} else {
 		// Set in user config
-		targetFile = loader.GetConfigFile()
+		targetFile := loader.GetConfigFile()
 
 		// Load existing user config or create new one
 		cfg = config.DefaultConfig()
@@ -223,11 +220,10 @@ type ConfigUnsetCmd struct {
 }
 
 // Run executes the config unset command
-func (c *ConfigUnsetCmd) Run(ctx *Context) error {
+func (c *ConfigUnsetCmd) Run(_ *Context) error {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 
 	var cfg *config.Config
-	var targetFile string
 
 	if c.Repo {
 		// Unset in repository config
@@ -240,7 +236,6 @@ func (c *ConfigUnsetCmd) Run(ctx *Context) error {
 			return fmt.Errorf("no repository configuration found")
 		}
 
-		targetFile = repoConfig
 		cfg = config.DefaultConfig()
 		data, err := os.ReadFile(repoConfig)
 		if err != nil {
@@ -251,7 +246,7 @@ func (c *ConfigUnsetCmd) Run(ctx *Context) error {
 		}
 	} else {
 		// Unset in user config
-		targetFile = loader.GetConfigFile()
+		targetFile := loader.GetConfigFile()
 
 		if _, err := os.Stat(targetFile); err != nil {
 			return fmt.Errorf("no user configuration found")
@@ -303,7 +298,7 @@ type ConfigReposCmd struct {
 type ConfigReposListCmd struct{}
 
 // Run executes the config repos list command
-func (c *ConfigReposListCmd) Run(ctx *Context) error {
+func (c *ConfigReposListCmd) Run(_ *Context) error {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 	configDir := loader.GetConfigDir()
 

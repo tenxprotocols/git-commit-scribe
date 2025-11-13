@@ -30,11 +30,12 @@ func (c *CommitMessage) Format() string {
 	}
 
 	// Add footer for breaking changes if needed
-	if c.Breaking && c.Footer != "" {
+	switch {
+	case c.Breaking && c.Footer != "":
 		parts = append(parts, "", c.Footer)
-	} else if c.Breaking {
+	case c.Breaking:
 		parts = append(parts, "", "BREAKING CHANGE: "+c.Description)
-	} else if c.Footer != "" {
+	case c.Footer != "":
 		parts = append(parts, "", c.Footer)
 	}
 

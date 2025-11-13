@@ -19,38 +19,24 @@ type CacheClearCmd struct {
 }
 
 // Run executes the cache clear command
-func (c *CacheClearCmd) Run(ctx *Context) error {
+func (c *CacheClearCmd) Run(_ *Context) error {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 	cacheDir := config.GetCacheDir(loader.GetConfigDir())
 
 	spinner := NewSpinner("Clearing disk cache...")
 	spinner.Start()
 
-	if c.All {
-		// Clear disk cache
-		if _, err := os.Stat(cacheDir); err == nil {
-			if err := os.RemoveAll(cacheDir); err != nil {
-				spinner.Error("Failed to clear disk cache")
-				return fmt.Errorf("failed to clear disk cache: %w", err)
-			}
-			spinner.Success("Disk cache cleared")
-		} else {
-			spinner.Stop()
-			PrintInfo("No disk cache found")
+	// Clear disk cache (both branches do the same thing)
+	// Note: Memory cache clearing would require a running instance
+	if _, err := os.Stat(cacheDir); err == nil {
+		if err := os.RemoveAll(cacheDir); err != nil {
+			spinner.Error("Failed to clear disk cache")
+			return fmt.Errorf("failed to clear disk cache: %w", err)
 		}
+		spinner.Success("Disk cache cleared")
 	} else {
-		// Note: Memory cache clearing would require a running instance
-		// For now, we'll just clear the disk cache
-		if _, err := os.Stat(cacheDir); err == nil {
-			if err := os.RemoveAll(cacheDir); err != nil {
-				spinner.Error("Failed to clear disk cache")
-				return fmt.Errorf("failed to clear disk cache: %w", err)
-			}
-			spinner.Success("Disk cache cleared")
-		} else {
-			spinner.Stop()
-			PrintInfo("No disk cache found")
-		}
+		spinner.Stop()
+		PrintInfo("No disk cache found")
 	}
 
 	return nil
@@ -60,7 +46,7 @@ func (c *CacheClearCmd) Run(ctx *Context) error {
 type CacheStatsCmd struct{}
 
 // Run executes the cache stats command
-func (c *CacheStatsCmd) Run(ctx *Context) error {
+func (c *CacheStatsCmd) Run(_ *Context) error {
 	loader := config.NewLoader(CLI.ConfigDir, CLI.ConfigFile)
 	cacheDir := config.GetCacheDir(loader.GetConfigDir())
 

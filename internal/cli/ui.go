@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,8 +29,8 @@ var (
 	emojiColor       = color.New(color.FgYellow)
 
 	// UI elements
-	promptColor  = color.New(color.FgCyan, color.Bold)
-	dimColor     = color.New(color.FgHiBlack)
+	promptColor    = color.New(color.FgCyan, color.Bold)
+	dimColor       = color.New(color.FgHiBlack)
 	highlightColor = color.New(color.FgYellow, color.Bold)
 )
 
@@ -117,15 +118,16 @@ func PrintDim(message string) {
 // PrintCommitMessage prints a commit message with syntax highlighting
 func PrintCommitMessage(message string) {
 	lines := strings.Split(message, "\n")
-	
+
 	for i, line := range lines {
-		if i == 0 {
+		switch {
+		case i == 0:
 			// First line: type(scope): description or type: description or description with emoji
 			highlightFirstLine(line)
-		} else if strings.TrimSpace(line) == "" {
+		case strings.TrimSpace(line) == "":
 			// Empty line
 			fmt.Println()
-		} else {
+		default:
 			// Body text
 			fmt.Println(bodyColor.Sprint(line))
 		}
@@ -137,7 +139,7 @@ func highlightFirstLine(line string) {
 	// Check for emoji at the start
 	hasEmoji := false
 	emojiEnd := 0
-	
+
 	// Simple emoji detection (any character that's not ASCII)
 	for i, r := range line {
 		if r > 127 {
@@ -157,10 +159,7 @@ func highlightFirstLine(line string) {
 	}
 
 	// Check for breaking change marker
-	hasBreaking := false
-	if strings.HasSuffix(strings.Split(line, ":")[0], "!") {
-		hasBreaking = true
-	}
+	hasBreaking := strings.HasSuffix(strings.Split(line, ":")[0], "!")
 
 	// Parse type(scope): description or type: description
 	if idx := strings.Index(line, ":"); idx != -1 {
@@ -172,7 +171,7 @@ func highlightFirstLine(line string) {
 			// type(scope) format
 			typ := typeScope[:scopeIdx]
 			scope := typeScope[scopeIdx:]
-			
+
 			if hasBreaking && strings.HasSuffix(typ, "!") {
 				fmt.Print(breakingColor.Sprint(typ[:len(typ)-1]))
 				fmt.Print(breakingColor.Sprint("!"))
@@ -222,7 +221,7 @@ func PromptYesNo(question string, defaultYes bool) (bool, error) {
 	}
 
 	response = strings.ToLower(strings.TrimSpace(response))
-	
+
 	// Empty response uses default
 	if response == "" {
 		return defaultYes, nil
@@ -237,7 +236,7 @@ func PromptYesNo(question string, defaultYes bool) (bool, error) {
 func PromptChoice(question string, options []string, defaultChoice int) (int, error) {
 	fmt.Println(promptColor.Sprint(question))
 	fmt.Println()
-	
+
 	for i, option := range options {
 		if i+1 == defaultChoice {
 			fmt.Printf("  %s %s %s\n", highlightColor.Sprintf("[%d]", i+1), option, dimColor.Sprint("(default)"))
@@ -246,7 +245,7 @@ func PromptChoice(question string, options []string, defaultChoice int) (int, er
 		}
 	}
 	fmt.Println()
-	
+
 	var promptText string
 	if defaultChoice > 0 && defaultChoice <= len(options) {
 		promptText = fmt.Sprintf("Enter choice [%d] or 0 to cancel: ", defaultChoice)
@@ -254,7 +253,7 @@ func PromptChoice(question string, options []string, defaultChoice int) (int, er
 		promptText = "Enter choice (or 0 to cancel): "
 	}
 	fmt.Print(promptColor.Sprint(promptText))
-	
+
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
@@ -262,12 +261,12 @@ func PromptChoice(question string, options []string, defaultChoice int) (int, er
 	}
 
 	response = strings.TrimSpace(response)
-	
+
 	// If empty and there's a default, use it
 	if response == "" && defaultChoice > 0 && defaultChoice <= len(options) {
 		return defaultChoice, nil
 	}
-	
+
 	var choice int
 	_, err = fmt.Sscanf(response, "%d", &choice)
 	if err != nil {
@@ -318,7 +317,8 @@ func EditText(initialText string) (string, error) {
 	tmpFile.Close()
 
 	// Open editor
-	cmd := exec.Command(editor, tmpPath)
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, editor, tmpPath)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -366,25 +366,25 @@ func PromptText(question string) (string, error) {
 func PromptMultilineText(question string) (string, error) {
 	fmt.Println(promptColor.Sprint(question))
 	PrintDim("(Enter an empty line to finish)")
-	
+
 	reader := bufio.NewReader(os.Stdin)
 	var lines []string
-	
+
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			return "", err
 		}
-		
+
 		line = strings.TrimRight(line, "\n\r")
-		
+
 		// Empty line signals end of input
 		if line == "" {
 			break
 		}
-		
+
 		lines = append(lines, line)
 	}
-	
+
 	return strings.Join(lines, "\n"), nil
 }

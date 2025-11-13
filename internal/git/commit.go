@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 )
@@ -16,7 +17,8 @@ func CreateCommit(message string) error {
 		return fmt.Errorf("no staged changes to commit")
 	}
 
-	cmd := exec.Command("git", "commit", "-m", message)
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "git", "commit", "-m", message)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -33,7 +35,8 @@ func PushChanges() error {
 		return fmt.Errorf("not a git repository")
 	}
 
-	cmd := exec.Command("git", "push")
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "git", "push")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -47,7 +50,8 @@ func PushChanges() error {
 
 // GetCurrentBranch returns the current git branch name
 func GetCurrentBranch() (string, error) {
-	cmd := exec.Command("git", "branch", "--show-current")
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "git", "branch", "--show-current")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
@@ -60,7 +64,8 @@ func GetCurrentBranch() (string, error) {
 
 // HasRemote checks if the repository has a remote configured
 func HasRemote() bool {
-	cmd := exec.Command("git", "remote")
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "git", "remote")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
