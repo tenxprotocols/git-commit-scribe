@@ -36,16 +36,17 @@ func (c *ConfigInitCmd) Run(ctx *Context) error {
 		}
 	}
 
-	fmt.Println("Initializing git-commit-scribe configuration")
-	fmt.Printf("Config file: %s\n\n", configFile)
+	FormatHeader("Initialize Configuration")
+	PrintDim(fmt.Sprintf("Config file: %s", configFile))
+	fmt.Println()
 
 	// Create default config
 	cfg := config.DefaultConfig()
 
 	// Prompt for API key
-	fmt.Println("OpenRouter API Key:")
-	fmt.Println("  You can get your API key from: https://openrouter.ai/keys")
-	fmt.Print("  Enter API key (input hidden): ")
+	PrintInfo("OpenRouter API Key")
+	PrintDim("  Get your API key from: https://openrouter.ai/keys")
+	fmt.Print(promptColor.Sprint("  Enter API key (input hidden): "))
 
 	apiKey, err := readSecureInput()
 	if err != nil {
@@ -59,7 +60,7 @@ func (c *ConfigInitCmd) Run(ctx *Context) error {
 	cfg.APIKey = apiKey
 
 	// Prompt for model
-	fmt.Print("\nModel [anthropic/claude-3.5-sonnet]: ")
+	fmt.Print(promptColor.Sprint("\nModel [anthropic/claude-3.5-sonnet]: "))
 	reader := bufio.NewReader(os.Stdin)
 	model, err := reader.ReadString('\n')
 	if err != nil {
@@ -72,13 +73,18 @@ func (c *ConfigInitCmd) Run(ctx *Context) error {
 	}
 
 	// Save configuration
+	spinner := NewSpinner("Saving configuration...")
+	spinner.Start()
+	
 	if err := loader.Save(cfg); err != nil {
+		spinner.Error("Failed to save configuration")
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
-	fmt.Printf("\n✓ Configuration saved to %s\n", configFile)
-	fmt.Println("\nYou can now use gscribe to generate commit messages!")
-	fmt.Println("Try: gscribe commit --help")
+	spinner.Success(fmt.Sprintf("Configuration saved to %s", configFile))
+	fmt.Println()
+	PrintSuccess("You can now use gscribe to generate commit messages!")
+	PrintDim("Try: gscribe commit --help")
 
 	return nil
 }
@@ -104,7 +110,9 @@ func (c *ConfigShowCmd) Run(ctx *Context) error {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
 
-		fmt.Printf("Global configuration (%s):\n\n", configFile)
+		FormatHeader("Global Configuration")
+		PrintDim(configFile)
+		fmt.Println()
 		fmt.Println(string(data))
 		return nil
 	}
@@ -115,10 +123,13 @@ func (c *ConfigShowCmd) Run(ctx *Context) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	fmt.Println("Current configuration (merged from all sources):\n")
+	FormatHeader("Current Configuration")
+	PrintDim("(merged from all sources)")
+	fmt.Println()
 	displayConfig(cfg)
 
-	fmt.Println("\nConfiguration sources (in priority order):")
+	FormatSubHeader("Configuration Sources")
+	PrintDim("Priority order (highest to lowest):")
 	fmt.Printf("  1. Command-line flags\n")
 	fmt.Printf("  2. Environment variables (GSCRIBE_*)\n")
 	fmt.Printf("  3. Repository config: %s\n", loader.GetRepoConfigFile())
@@ -200,7 +211,7 @@ func (c *ConfigSetCmd) Run(ctx *Context) error {
 	if c.Repo {
 		scope = "repository"
 	}
-	fmt.Printf("✓ Set %s config: %s = %s\n", scope, c.Key, c.Value)
+	PrintSuccess(fmt.Sprintf("Set %s config: %s = %s", scope, c.Key, c.Value))
 
 	return nil
 }
@@ -278,7 +289,7 @@ func (c *ConfigUnsetCmd) Run(ctx *Context) error {
 	if c.Repo {
 		scope = "repository"
 	}
-	fmt.Printf("✓ Unset %s config: %s\n", scope, c.Key)
+	PrintSuccess(fmt.Sprintf("Unset %s config: %s", scope, c.Key))
 
 	return nil
 }
@@ -320,12 +331,11 @@ func (c *ConfigReposListCmd) Run(ctx *Context) error {
 	}
 
 	if len(repoConfigs) == 0 {
-		fmt.Println("No repositories with custom configuration found")
+		PrintInfo("No repositories with custom configuration found")
 		return nil
 	}
 
-	fmt.Println("Repositories with custom configuration:")
-	fmt.Println()
+	FormatHeader("Repositories with Custom Configuration")
 
 	for _, configPath := range repoConfigs {
 		// Try to determine repository path from config location
@@ -334,8 +344,8 @@ func (c *ConfigReposListCmd) Run(ctx *Context) error {
 			repoPath = filepath.Dir(filepath.Dir(configPath))
 		}
 
-		fmt.Printf("  • %s\n", repoPath)
-		fmt.Printf("    Config: %s\n", configPath)
+		fmt.Printf("  • %s\n", highlightColor.Sprint(repoPath))
+		PrintDim(fmt.Sprintf("    Config: %s", configPath))
 
 		// Load and show a summary of the config
 		cfg := config.DefaultConfig()
