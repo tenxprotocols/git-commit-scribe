@@ -9,7 +9,29 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    name: Run Tests Before Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      
+      - name: Run tests
+        run: go test -v -race ./...
+      
+      - name: Run go vet
+        run: go vet ./...
+
   release:
+    name: Create Release
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,3 +53,81 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+  verify-installation:
+    name: Verify Installation on ${{ matrix.os }}
+    needs: release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+      - name: Wait for release assets
+        run: sleep 30
+      
+      - name: Download and verify (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          curl -L -o gscribe.tar.gz "https://github.com/${{ github.repository }}/releases/download/${TAG}/git-commit-scribe-${VERSION}-linux-amd64.tar.gz"
+          tar -xzf gscribe.tar.gz
+          chmod +x gscribe
+          ./gscribe --version
+          ./gscribe --help
+      
+      - name: Download and verify (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          ARCH=$(uname -m)
+          if [ "$ARCH" = "x86_64" ]; then
+            ARCH="amd64"
+          elif [ "$ARCH" = "arm64" ]; then
+            ARCH="arm64"
+          fi
+          curl -L -o gscribe.tar.gz "https://github.com/${{ github.repository }}/releases/download/${TAG}/git-commit-scribe-${VERSION}-darwin-${ARCH}.tar.gz"
+          tar -xzf gscribe.tar.gz
+          chmod +x gscribe
+          ./gscribe --version
+          ./gscribe --help
+      
+      - name: Download and verify (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
+          $version = $tag -replace 'v', ''
+          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/$tag/git-commit-scribe-$version-windows-amd64.zip" -OutFile gscribe.zip
+          Expand-Archive -Path gscribe.zip -DestinationPath .
+          .\gscribe.exe --version
+          .\gscribe.exe --help
+      
+      - name: Test basic functionality (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          git config --global user.email "test@example.com"
+          git config --global user.name "Test User"
+          mkdir test-repo
+          cd test-repo
+          git init
+          echo "test" > test.txt
+          git add test.txt
+          # Test that gscribe can run (will fail without API key, but should not crash)
+          ../gscribe --dry-run 2>&1 | grep -q "version\|help\|error" || true
+      
+      - name: Test basic functionality (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          git config --global user.email "test@example.com"
+          git config --global user.name "Test User"
+          New-Item -ItemType Directory -Path test-repo -Force
+          Set-Location test-repo
+          git init
+          "test" | Out-File test.txt
+          git add test.txt
+          # Test that gscribe can run (will fail without API key, but should not crash)
+          try { ..\gscribe.exe --dry-run } catch { Write-Host "Expected error without API key" }

@@ -1,0 +1,23 @@
+version: v2
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+    - gosec
+    - gocritic
+    - unconvert
+    - unparam
+    - bodyclose
+    - noctx
+    - exportloopref
+    - gocyclo
+    - dupl
