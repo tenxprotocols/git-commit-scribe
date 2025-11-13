@@ -714,23 +714,6 @@ gscribe -d | pbcopy
 gscribe -d -o | pbcopy
 ```
 
-### Windows (PowerShell)
-
-```powershell
-# Copy to clipboard
-gscribe -d | Set-Clipboard
-
-# Git alias
-git config --global alias.cm "!gscribe -y"
-
-# Function in profile
-function Quick-Commit {
-  git add .
-  gscribe -y
-}
-Set-Alias gc Quick-Commit
-```
-
 ### Linux
 
 ```bash

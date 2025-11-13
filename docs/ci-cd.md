@@ -21,7 +21,7 @@ The project uses GitHub Actions for automated testing, building, and releases wi
 **Jobs:**
 
 #### 1. Test Matrix
-- **Platforms**: Ubuntu, macOS, Windows
+- **Platforms**: Ubuntu, macOS
 - **Go Versions**: 1.22, 1.23
 - **Steps**:
   - Checkout code
@@ -53,7 +53,6 @@ The project uses GitHub Actions for automated testing, building, and releases wi
 **Build Matrix:**
 - **Linux**: amd64, arm64
 - **macOS**: amd64 (Intel), arm64 (Apple Silicon)
-- **Windows**: amd64, arm64
 
 **Features:**
 - Version information embedding (version, commit, build date)
@@ -66,8 +65,6 @@ The project uses GitHub Actions for automated testing, building, and releases wi
 - `gscribe-linux-arm64`
 - `gscribe-darwin-amd64`
 - `gscribe-darwin-arm64`
-- `gscribe-windows-amd64.exe`
-- `gscribe-windows-arm64.exe`
 
 **Status**: [![Build](https://github.com/TenXProtocols/git-commit-scribe/actions/workflows/build.yml/badge.svg)](https://github.com/TenXProtocols/git-commit-scribe/actions/workflows/build.yml)
 
@@ -106,7 +103,7 @@ The project uses GitHub Actions for automated testing, building, and releases wi
 - Merge commits
 
 #### 3. Installation Verification
-- Downloads released binaries for Ubuntu, macOS, and Windows
+- Downloads released binaries for Ubuntu and macOS
 - Verifies binary execution (`--version`, `--help`)
 - Tests basic functionality with git repositories
 - Ensures binaries work correctly on each platform
@@ -121,14 +118,13 @@ GoReleaser configuration for building and releasing:
 
 ```yaml
 builds:
-  - Builds for linux, darwin, windows
+  - Builds for linux, darwin
   - Architectures: amd64, arm64
   - Embeds version, commit, and build date
   - CGO disabled for static binaries
 
 archives:
   - tar.gz for Unix systems
-  - zip for Windows
   - Includes LICENSE and README
 
 changelog:

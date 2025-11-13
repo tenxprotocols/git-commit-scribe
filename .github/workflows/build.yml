@@ -39,16 +39,6 @@ jobs:
             goos: darwin
             goarch: arm64
             artifact_name: gscribe-darwin-arm64
-          
-          # Windows builds
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-            artifact_name: gscribe-windows-amd64.exe
-          - os: windows-latest
-            goos: windows
-            goarch: arm64
-            artifact_name: gscribe-windows-arm64.exe
     
     steps:
       - name: Checkout code
@@ -100,19 +90,12 @@ jobs:
           path: ${{ matrix.artifact_name }}
           retention-days: 30
       
-      - name: Run basic verification (non-Windows)
-        if: matrix.goos != 'windows'
+      - name: Run basic verification
         shell: bash
         run: |
           chmod +x ${{ matrix.artifact_name }}
           ./${{ matrix.artifact_name }} --version || echo "Version check failed (expected for cross-compiled arm64 on amd64)"
       
-      - name: Run basic verification (Windows)
-        if: matrix.goos == 'windows' && matrix.os == 'windows-latest' && matrix.goarch == 'amd64'
-        shell: bash
-        run: |
-          ./${{ matrix.artifact_name }} --version
-
   build-summary:
     name: Build Summary
     needs: build

@@ -514,21 +514,6 @@ Error: model not available: invalid-model-name
    brew install git-commit-scribe
    ```
 
-### Windows: Path Issues
-
-**Problem:** Command not found on Windows.
-
-**Solutions:**
-
-1. **Add to PATH manually:**
-   - Open System Properties > Environment Variables
-   - Add `%USERPROFILE%\go\bin` to PATH
-
-2. **Use PowerShell:**
-   ```powershell
-   $env:Path += ";$env:USERPROFILE\go\bin"
-   ```
-
 ### Linux: Permission Denied
 
 **Problem:**
@@ -633,7 +618,7 @@ If you're still experiencing issues:
    gscribe --version
    go version
    git --version
-   uname -a  # or systeminfo on Windows
+   uname -a
    
    # Include configuration (redact API key):
    gscribe config show

@@ -60,7 +60,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     
     steps:
       - name: Wait for release assets
@@ -94,19 +94,7 @@ jobs:
           ./gscribe --version
           ./gscribe --help
       
-      - name: Download and verify (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
-          $version = $tag -replace 'v', ''
-          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/$tag/git-commit-scribe-$version-windows-amd64.zip" -OutFile gscribe.zip
-          Expand-Archive -Path gscribe.zip -DestinationPath .
-          .\gscribe.exe --version
-          .\gscribe.exe --help
-      
-      - name: Test basic functionality (Linux/macOS)
-        if: matrix.os != 'windows-latest'
+      - name: Test basic functionality
         run: |
           git config --global user.email "test@example.com"
           git config --global user.name "Test User"
@@ -117,17 +105,3 @@ jobs:
           git add test.txt
           # Test that gscribe can run (will fail without API key, but should not crash)
           ../gscribe --dry-run 2>&1 | grep -q "version\|help\|error" || true
-      
-      - name: Test basic functionality (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          git config --global user.email "test@example.com"
-          git config --global user.name "Test User"
-          New-Item -ItemType Directory -Path test-repo -Force
-          Set-Location test-repo
-          git init
-          "test" | Out-File test.txt
-          git add test.txt
-          # Test that gscribe can run (will fail without API key, but should not crash)
-          try { ..\gscribe.exe --dry-run } catch { Write-Host "Expected error without API key" }
