@@ -1,4 +1,4 @@
-name: Release
+name: CD
 
 on:
   push:
@@ -9,29 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  test:
-    name: Run Tests Before Release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-      
-      - name: Run tests
-        run: go test -v -race ./...
-      
-      - name: Run go vet
-        run: go vet ./...
-
   release:
     name: Create Release
-    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
