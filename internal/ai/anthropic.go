@@ -47,8 +47,7 @@ func (p *AnthropicProvider) GenerateCommitMessage(ctx context.Context, opts Gene
 	// Extract text from response content blocks
 	var content string
 	for _, block := range message.Content {
-		switch b := block.AsAny().(type) {
-		case anthropic.TextBlock:
+		if b, ok := block.AsAny().(anthropic.TextBlock); ok {
 			content += b.Text
 		}
 	}

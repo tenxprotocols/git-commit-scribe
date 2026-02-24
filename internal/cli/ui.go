@@ -319,8 +319,10 @@ func EditText(initialText string) (string, error) {
 	// Open editor — split editor string to handle args (e.g. "codium --wait")
 	ctx := context.Background()
 	parts := strings.Fields(editor)
-	editorArgs := append(parts[1:], tmpPath)
-	cmd := exec.CommandContext(ctx, parts[0], editorArgs...)
+	editorArgs := make([]string, len(parts)-1, len(parts))
+	copy(editorArgs, parts[1:])
+	editorArgs = append(editorArgs, tmpPath)
+	cmd := exec.CommandContext(ctx, parts[0], editorArgs...) //nolint:gosec // editor command is from user's EDITOR/VISUAL env var
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

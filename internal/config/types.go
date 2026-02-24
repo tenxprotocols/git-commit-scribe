@@ -57,22 +57,23 @@ func (c *Config) ResolveProvider() (provider, apiKey, model string, err error) {
 	provider = c.Provider
 
 	if provider == "auto" {
-		if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+		switch {
+		case os.Getenv("ANTHROPIC_API_KEY") != "":
 			provider = "anthropic"
-			apiKey = key
-		} else if key := os.Getenv("OPENROUTER_API_KEY"); key != "" {
+			apiKey = os.Getenv("ANTHROPIC_API_KEY")
+		case os.Getenv("OPENROUTER_API_KEY") != "":
 			provider = "openrouter"
-			apiKey = key
-		} else if c.AnthropicAPIKey != "" {
+			apiKey = os.Getenv("OPENROUTER_API_KEY")
+		case c.AnthropicAPIKey != "":
 			provider = "anthropic"
 			apiKey = c.AnthropicAPIKey
-		} else if c.OpenRouterAPIKey != "" {
+		case c.OpenRouterAPIKey != "":
 			provider = "openrouter"
 			apiKey = c.OpenRouterAPIKey
-		} else if c.APIKey != "" {
+		case c.APIKey != "":
 			provider = "openrouter"
 			apiKey = c.APIKey
-		} else {
+		default:
 			return "", "", "", fmt.Errorf("no API key configured. Run 'gscribe config init' or set ANTHROPIC_API_KEY or OPENROUTER_API_KEY")
 		}
 	} else {
