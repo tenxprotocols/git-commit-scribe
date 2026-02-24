@@ -111,8 +111,9 @@ func (c *CommitCmd) loadAndOverrideConfig() (*config.Config, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Override config with CLI flags
-	if CLI.Provider != "" {
+	// Override config with CLI flags (only override provider if explicitly set,
+	// not when it's the default "auto" which Kong always populates)
+	if CLI.Provider != "" && CLI.Provider != "auto" {
 		cfg.Provider = CLI.Provider
 	}
 	if CLI.Model != "" {
