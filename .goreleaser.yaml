@@ -22,7 +22,7 @@ builds:
       - -X main.buildDate={{.Date}}
 
 archives:
-  - format: tar.gz
+  - formats: ['tar.gz']
     name_template: >-
       {{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}
     files:
@@ -30,8 +30,8 @@ archives:
       - README*
 
 checksum:
-  name_template: 'SHA256SUMS'
   algorithm: sha256
+  name_template: 'SHA256SUMS'
 
 changelog:
   sort: asc
@@ -65,7 +65,8 @@ changelog:
       - Merge branch
 
 brews:
-  - repository:
+  - name: gscribe
+    repository:
       owner: TenXProtocols
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"

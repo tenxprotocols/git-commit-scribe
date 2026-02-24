@@ -1,0 +1,92 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+
+tasks:
+  default:
+    cmds:
+      - echo "{{.GREETING}}"
+    silent: true
+
+  # Download and verify Go dependencies
+  deps:
+    desc: Download and verify Go dependencies
+    cmds:
+      - go mod download
+      - go mod verify
+
+  # Run go vet to check for suspicious code
+  vet:
+    desc: Run go vet to check for suspicious code
+    cmds:
+      - go vet ./...
+
+  # Check code formatting with gofmt
+  fmt-check:
+    desc: Check if code is properly formatted
+    cmds:
+      - |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files need formatting:"
+          gofmt -s -l .
+          exit 1
+        fi
+
+  # Format code with gofmt
+  fmt:
+    desc: Format code with gofmt
+    cmds:
+      - gofmt -s -w .
+
+  # Run golangci-lint
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint config path
+      - golangci-lint config verify
+      - golangci-lint run --timeout=5m
+
+  # Run all tests with race detection and coverage
+  test:
+    desc: Run tests with race detection and coverage
+    cmds:
+      - go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+  # Build the binary
+  build:
+    desc: Build the gscribe binary
+    cmds:
+      - go build -v -o gscribe ./cmd/gscribe
+
+  # Build with custom version info (used by CI)
+  build-release:
+    desc: Build binary with version info
+    vars:
+      VERSION: '{{.VERSION | default "dev"}}'
+      COMMIT: '{{.COMMIT | default "unknown"}}'
+      BUILD_DATE: '{{.BUILD_DATE | default "unknown"}}'
+      OUTPUT: '{{.OUTPUT | default "gscribe"}}'
+    cmds:
+      - |
+        go build -v \
+          -ldflags="-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.buildDate={{.BUILD_DATE}}" \
+          -o {{.OUTPUT}} \
+          ./cmd/gscribe
+
+  # Run all checks (vet, fmt-check, lint, test)
+  check:
+    desc: Run all checks (vet, fmt-check, lint, test)
+    cmds:
+      - task: vet
+      - task: fmt-check
+      - task: lint
+      - task: test
+
+  # Clean build artifacts
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f gscribe gscribe-* coverage.out
