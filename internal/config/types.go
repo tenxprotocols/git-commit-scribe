@@ -1,18 +1,27 @@
 package config
 
 import (
+	"fmt"
+	"os"
 	"time"
+)
+
+const (
+	DefaultAnthropicModel  = "claude-sonnet-4-6"
+	DefaultOpenRouterModel = "anthropic/claude-3.5-sonnet"
 )
 
 // Config represents the complete configuration
 type Config struct {
-	Provider string            `yaml:"provider"`
-	Model    string            `yaml:"model"`
-	APIKey   string            `yaml:"api_key"`
-	Cache    CacheConfig       `yaml:"cache"`
-	AI       AIConfig          `yaml:"ai"`
-	Commit   CommitConfig      `yaml:"commit"`
-	Types    map[string]string `yaml:"types,omitempty"`
+	Provider         string            `yaml:"provider"`
+	Model            string            `yaml:"model"`
+	APIKey           string            `yaml:"api_key,omitempty"` // backwards compat fallback
+	AnthropicAPIKey  string            `yaml:"anthropic_api_key,omitempty"`
+	OpenRouterAPIKey string            `yaml:"openrouter_api_key,omitempty"`
+	Cache            CacheConfig       `yaml:"cache"`
+	AI               AIConfig          `yaml:"ai"`
+	Commit           CommitConfig      `yaml:"commit"`
+	Types            map[string]string `yaml:"types,omitempty"`
 }
 
 // CacheConfig holds caching configuration
@@ -43,11 +52,73 @@ type CommitConfig struct {
 	Confirm           bool `yaml:"confirm"`
 }
 
+// ResolveProvider determines the active provider, API key, and model.
+func (c *Config) ResolveProvider() (provider, apiKey, model string, err error) {
+	provider = c.Provider
+
+	if provider == "auto" {
+		if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+			provider = "anthropic"
+			apiKey = key
+		} else if key := os.Getenv("OPENROUTER_API_KEY"); key != "" {
+			provider = "openrouter"
+			apiKey = key
+		} else if c.AnthropicAPIKey != "" {
+			provider = "anthropic"
+			apiKey = c.AnthropicAPIKey
+		} else if c.OpenRouterAPIKey != "" {
+			provider = "openrouter"
+			apiKey = c.OpenRouterAPIKey
+		} else if c.APIKey != "" {
+			provider = "openrouter"
+			apiKey = c.APIKey
+		} else {
+			return "", "", "", fmt.Errorf("no API key configured. Run 'gscribe config init' or set ANTHROPIC_API_KEY or OPENROUTER_API_KEY")
+		}
+	} else {
+		switch provider {
+		case "anthropic":
+			apiKey = c.AnthropicAPIKey
+			if apiKey == "" {
+				apiKey = os.Getenv("ANTHROPIC_API_KEY")
+			}
+			if apiKey == "" {
+				apiKey = c.APIKey
+			}
+		case "openrouter":
+			apiKey = c.OpenRouterAPIKey
+			if apiKey == "" {
+				apiKey = os.Getenv("OPENROUTER_API_KEY")
+			}
+			if apiKey == "" {
+				apiKey = c.APIKey
+			}
+		default:
+			return "", "", "", fmt.Errorf("unsupported provider: %s", provider)
+		}
+		if apiKey == "" {
+			return "", "", "", fmt.Errorf("API key not configured for provider %s", provider)
+		}
+	}
+
+	model = c.Model
+	if model == "" {
+		switch provider {
+		case "anthropic":
+			model = DefaultAnthropicModel
+		case "openrouter":
+			model = DefaultOpenRouterModel
+		}
+	}
+
+	return provider, apiKey, model, nil
+}
+
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
 	return &Config{
-		Provider: "openrouter",
-		Model:    "anthropic/claude-3.5-sonnet",
+		Provider: "auto",
+		// Model intentionally empty — set per-provider at resolve time
 		Cache: CacheConfig{
 			Enabled:     true,
 			TTL:         86400, // 24 hours

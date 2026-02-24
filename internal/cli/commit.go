@@ -43,21 +43,23 @@ type CommitCmd struct {
 
 // generateCommitMessage generates a commit message using AI
 func (c *CommitCmd) generateCommitMessage(cfg *config.Config, diff string, additionalContext string) (*ai.CommitResult, error) {
-	// Initialize AI provider
-	var provider ai.Provider
-	var err error
+	// Resolve provider, API key, and model
+	resolvedProvider, apiKey, model, err := cfg.ResolveProvider()
+	if err != nil {
+		return nil, err
+	}
 
-	switch cfg.Provider {
+	var provider ai.Provider
+	switch resolvedProvider {
+	case "anthropic":
+		provider, err = ai.NewAnthropicProvider(apiKey, model)
 	case "openrouter":
-		if cfg.APIKey == "" {
-			return nil, fmt.Errorf("API key not configured. Run 'gscribe config init' or set GSCRIBE_API_KEY environment variable")
-		}
-		provider, err = ai.NewOpenRouterProvider(cfg.APIKey, cfg.Model)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create AI provider: %w", err)
-		}
+		provider, err = ai.NewOpenRouterProvider(apiKey, model)
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)
+		return nil, fmt.Errorf("unsupported provider: %s", resolvedProvider)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AI provider: %w", err)
 	}
 
 	// Determine which custom prompt to use
@@ -67,7 +69,7 @@ func (c *CommitCmd) generateCommitMessage(cfg *config.Config, diff string, addit
 	}
 
 	// Show progress spinner for AI generation
-	spinner := NewSpinner(fmt.Sprintf("Generating commit message using %s...", cfg.Model))
+	spinner := NewSpinner(fmt.Sprintf("Generating commit message using %s/%s...", resolvedProvider, model))
 	spinner.Start()
 
 	genOpts := ai.GenerateOptions{

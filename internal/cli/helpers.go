@@ -21,20 +21,43 @@ func readSecureInput() (string, error) {
 	return strings.TrimSpace(string(bytePassword)), nil
 }
 
+// maskKey masks an API key for display, showing only the first and last 4 characters
+func maskKey(key string) string {
+	if len(key) > 8 {
+		return key[:4] + "..." + key[len(key)-4:]
+	}
+	return "****"
+}
+
 // displayConfig displays configuration in a readable format
 func displayConfig(cfg *config.Config) {
 	fmt.Printf("Provider: %s\n", cfg.Provider)
-	fmt.Printf("Model: %s\n", cfg.Model)
-
-	// Mask API key for security
-	if cfg.APIKey != "" {
-		masked := cfg.APIKey
-		if len(masked) > 8 {
-			masked = masked[:4] + "..." + masked[len(masked)-4:]
-		}
-		fmt.Printf("API Key: %s\n", masked)
+	if cfg.Model != "" {
+		fmt.Printf("Model: %s\n", cfg.Model)
 	} else {
-		fmt.Printf("API Key: (not set)\n")
+		fmt.Printf("Model: (auto, per-provider default)\n")
+	}
+
+	// Show per-provider API keys
+	if cfg.AnthropicAPIKey != "" {
+		fmt.Printf("Anthropic API Key: %s\n", maskKey(cfg.AnthropicAPIKey))
+	} else {
+		fmt.Printf("Anthropic API Key: (not set)\n")
+	}
+	if cfg.OpenRouterAPIKey != "" {
+		fmt.Printf("OpenRouter API Key: %s\n", maskKey(cfg.OpenRouterAPIKey))
+	} else {
+		fmt.Printf("OpenRouter API Key: (not set)\n")
+	}
+
+	// Show legacy key if set
+	if cfg.APIKey != "" {
+		fmt.Printf("Legacy API Key: %s\n", maskKey(cfg.APIKey))
+	}
+
+	// Show resolved provider
+	if resolved, _, resolvedModel, err := cfg.ResolveProvider(); err == nil {
+		fmt.Printf("\nResolved: %s (model: %s)\n", resolved, resolvedModel)
 	}
 
 	fmt.Println("\nCache:")
@@ -78,6 +101,10 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		cfg.Model = value
 	case "api_key":
 		cfg.APIKey = value
+	case "anthropic_api_key":
+		cfg.AnthropicAPIKey = value
+	case "openrouter_api_key":
+		cfg.OpenRouterAPIKey = value
 	case "cache":
 		if len(parts) < 2 {
 			return fmt.Errorf("cache key requires a subkey (e.g., cache.enabled)")
@@ -242,6 +269,10 @@ func unsetConfigValue(cfg, defaultCfg *config.Config, key string) error {
 		cfg.Model = defaultCfg.Model
 	case "api_key":
 		cfg.APIKey = ""
+	case "anthropic_api_key":
+		cfg.AnthropicAPIKey = ""
+	case "openrouter_api_key":
+		cfg.OpenRouterAPIKey = ""
 	case "cache":
 		if len(parts) < 2 {
 			cfg.Cache = defaultCfg.Cache

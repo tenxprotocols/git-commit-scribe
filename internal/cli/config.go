@@ -40,36 +40,101 @@ func (c *ConfigInitCmd) Run(_ *Context) error {
 	PrintDim(fmt.Sprintf("Config file: %s", configFile))
 	fmt.Println()
 
+	// Detect existing environment variables
+	anthropicEnv := os.Getenv("ANTHROPIC_API_KEY")
+	openrouterEnv := os.Getenv("OPENROUTER_API_KEY")
+
+	if anthropicEnv != "" || openrouterEnv != "" {
+		PrintInfo("Detected API keys in environment:")
+		if anthropicEnv != "" {
+			PrintDim(fmt.Sprintf("  ANTHROPIC_API_KEY: %s", maskKey(anthropicEnv)))
+		}
+		if openrouterEnv != "" {
+			PrintDim(fmt.Sprintf("  OPENROUTER_API_KEY: %s", maskKey(openrouterEnv)))
+		}
+		fmt.Println()
+	}
+
 	// Create default config
 	cfg := config.DefaultConfig()
 
-	// Prompt for API key
-	PrintInfo("OpenRouter API Key")
-	PrintDim("  Get your API key from: https://openrouter.ai/keys")
-	fmt.Print(promptColor.Sprint("  Enter API key (input hidden): "))
-
-	apiKey, err := readSecureInput()
+	// Prompt for provider choice
+	choice, err := PromptChoice("Which provider would you like to configure?", []string{
+		"Anthropic (Claude API directly)",
+		"OpenRouter",
+		"Skip (use environment variables)",
+	}, 1)
 	if err != nil {
-		return fmt.Errorf("failed to read API key: %w", err)
+		return fmt.Errorf("failed to read choice: %w", err)
+	}
+	if choice == 0 {
+		return fmt.Errorf("setup cancelled")
 	}
 
-	if apiKey == "" {
-		return fmt.Errorf("API key is required")
-	}
+	switch choice {
+	case 1:
+		// Anthropic
+		cfg.Provider = "anthropic"
+		fmt.Println()
+		PrintInfo("Anthropic API Key")
+		PrintDim("  Get your API key from: https://console.anthropic.com/settings/keys")
+		fmt.Print(promptColor.Sprint("  Enter API key (input hidden): "))
 
-	cfg.APIKey = apiKey
+		apiKey, err := readSecureInput()
+		if err != nil {
+			return fmt.Errorf("failed to read API key: %w", err)
+		}
+		if apiKey == "" {
+			return fmt.Errorf("API key is required")
+		}
+		cfg.AnthropicAPIKey = apiKey
 
-	// Prompt for model
-	fmt.Print(promptColor.Sprint("\nModel [anthropic/claude-3.5-sonnet]: "))
-	reader := bufio.NewReader(os.Stdin)
-	model, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read model: %w", err)
-	}
+		// Prompt for model
+		fmt.Print(promptColor.Sprintf("\nModel [%s]: ", config.DefaultAnthropicModel))
+		reader := bufio.NewReader(os.Stdin)
+		model, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read model: %w", err)
+		}
+		model = strings.TrimSpace(model)
+		if model != "" {
+			cfg.Model = model
+		}
 
-	model = strings.TrimSpace(model)
-	if model != "" {
-		cfg.Model = model
+	case 2:
+		// OpenRouter
+		cfg.Provider = "openrouter"
+		fmt.Println()
+		PrintInfo("OpenRouter API Key")
+		PrintDim("  Get your API key from: https://openrouter.ai/keys")
+		fmt.Print(promptColor.Sprint("  Enter API key (input hidden): "))
+
+		apiKey, err := readSecureInput()
+		if err != nil {
+			return fmt.Errorf("failed to read API key: %w", err)
+		}
+		if apiKey == "" {
+			return fmt.Errorf("API key is required")
+		}
+		cfg.OpenRouterAPIKey = apiKey
+
+		// Prompt for model
+		fmt.Print(promptColor.Sprintf("\nModel [%s]: ", config.DefaultOpenRouterModel))
+		reader := bufio.NewReader(os.Stdin)
+		model, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read model: %w", err)
+		}
+		model = strings.TrimSpace(model)
+		if model != "" {
+			cfg.Model = model
+		}
+
+	case 3:
+		// Skip — use environment variables
+		fmt.Println()
+		PrintInfo("Skipping API key configuration. Environment variables will be used.")
+		PrintDim("  Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY in your shell profile.")
 	}
 
 	// Save configuration

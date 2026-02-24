@@ -316,9 +316,11 @@ func EditText(initialText string) (string, error) {
 	}
 	tmpFile.Close()
 
-	// Open editor
+	// Open editor — split editor string to handle args (e.g. "codium --wait")
 	ctx := context.Background()
-	cmd := exec.CommandContext(ctx, editor, tmpPath)
+	parts := strings.Fields(editor)
+	editorArgs := append(parts[1:], tmpPath)
+	cmd := exec.CommandContext(ctx, parts[0], editorArgs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
